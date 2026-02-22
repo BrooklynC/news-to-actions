@@ -1,5 +1,7 @@
 import { Banner } from "@/components/ui/Banner";
 import { Card } from "@/components/ui/Card";
+import { ClampText } from "@/components/ui/ClampText";
+import { BulletedText } from "@/components/ui/BulletedText";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ArticleSummarizeButton } from "./ArticleSummarizeButton";
 import { ArticleGenerateButton } from "./ArticleGenerateButton";
@@ -36,6 +38,10 @@ export default async function ArticlesPage({
     id: string;
     name: string;
     query: string;
+    lastIngestAt: Date | null;
+    cadence: string;
+    nextRunAt: Date | null;
+    recipeType: string;
     articles: {
       id: string;
       title: string;
@@ -113,7 +119,15 @@ export default async function ArticlesPage({
         />
         {orgId && (
           <IngestCardServer
-            topics={topics.map((t) => ({ id: t.id, name: t.name, query: t.query }))}
+            topics={topics.map((t) => ({
+              id: t.id,
+              name: t.name,
+              query: t.query,
+              lastIngestAt: t.lastIngestAt ?? null,
+              cadence: t.cadence,
+              nextRunAt: t.nextRunAt ?? null,
+              recipeType: t.recipeType,
+            }))}
             personasCount={personas.length}
           />
         )}
@@ -185,14 +199,11 @@ export default async function ArticlesPage({
 
       {orgId && !hasAnyArticles && (
         <Card className="rounded-3xl py-16 text-center">
-          <p className="text-base font-medium text-zinc-600 dark:text-zinc-400">
-            No articles yet
+          <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+            No articles yet.
           </p>
-          <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-500">
-            Ingest articles for a Topic to get started.
-          </p>
-          <p className="mt-4 text-sm text-zinc-500 dark:text-zinc-500">
-            Add a topic in the Ingest card above, then click Fetch.
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-500">
+            Add a topic, then Fetch.
           </p>
         </Card>
       )}
@@ -246,45 +257,71 @@ export default async function ArticlesPage({
                   </span>
                 </div>
 
-                <div className="mt-4 border-t border-zinc-100/80 pt-4 dark:border-zinc-700">
-                  <p className="mb-2 text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                <div className="mt-4 space-y-2 border-t border-zinc-100/80 pt-4 dark:border-zinc-700">
+                  <p className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                     Quick summary
                   </p>
                   {a.summary ? (
-                    <p className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
-                      {a.summary}
-                    </p>
+                    <div className="text-sm leading-6 text-zinc-700 dark:text-zinc-300">
+                      <ClampText text={a.summary} lines={3} preserveNewlines />
+                    </div>
                   ) : (
                     <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
                       <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                        No summary yet — click Summarize to make this quick to scan.
+                        No summary yet.
+                      </p>
+                      <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-500">
+                        Click Summarize to scan.
                       </p>
                     </div>
                   )}
                 </div>
 
-                <div className="mt-4 border-t border-zinc-100/80 pt-4 dark:border-zinc-700">
-                  <p className="mb-2 text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                <div className="mt-4 space-y-2 border-t border-zinc-100/80 pt-4 dark:border-zinc-700">
+                  <p className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                     Next steps
                   </p>
                   {a.actionItems.length > 0 ? (
                     <>
-                      <ul className="space-y-0.5 text-sm text-zinc-700 dark:text-zinc-300">
-                        {a.actionItems.slice(0, 3).map((ai, i) => (
-                          <li key={i} className="flex gap-2">
-                            <span className="text-zinc-400" aria-hidden>•</span>
-                            <span>{ai.text.split(":")[0]?.trim() ?? ai.text}</span>
-                          </li>
-                        ))}
+                      <ul className="space-y-2 text-sm">
+                        {a.actionItems.slice(0, 5).map((ai, i) => {
+                          const [titlePart, ...rest] = ai.text.split(":");
+                          const title = titlePart?.trim() ?? ai.text;
+                          const description =
+                            rest.length > 0 ? rest.join(":").trim() : null;
+                          return (
+                            <li
+                              key={i}
+                              className="rounded-xl border border-zinc-100 px-3 py-2 dark:border-zinc-700"
+                            >
+                              <span
+                                className="line-clamp-1 block font-medium text-zinc-900 dark:text-zinc-100"
+                                title={title}
+                              >
+                                {title}
+                              </span>
+                              {description && (
+                                <details className="mt-1 group">
+                                  <summary className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300">
+                                    View details
+                                  </summary>
+                                  <div className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-400">
+                                    <BulletedText text={description} />
+                                  </div>
+                                </details>
+                              )}
+                            </li>
+                          );
+                        })}
                       </ul>
-                      {a.actionItems.length > 3 && (
-                        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                          +{a.actionItems.length - 3} more
+                      {a.actionItems.length > 5 && (
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                          +{a.actionItems.length - 5} more
                         </p>
                       )}
                       <a
                         href="/app/actions"
-                        className="mt-2 inline-block text-sm font-medium text-zinc-900 underline hover:no-underline dark:text-zinc-100"
+                        className="inline-block text-sm font-medium text-zinc-900 underline hover:no-underline dark:text-zinc-100"
                       >
                         View all actions
                       </a>
@@ -292,7 +329,10 @@ export default async function ArticlesPage({
                   ) : (
                     <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
                       <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                        No action items yet — click Generate actions to get clear follow-ups.
+                        No actions yet.
+                      </p>
+                      <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-500">
+                        Run this topic to generate.
                       </p>
                     </div>
                   )}

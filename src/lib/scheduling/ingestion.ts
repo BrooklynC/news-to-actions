@@ -1,10 +1,11 @@
 /**
  * Topic ingestion scheduling: computes next run times and enqueues due topics.
  * No domain logic; only enqueues INGEST_TOPIC jobs and updates topic schedule.
+ * Uses cadence + nextRunAt; skips MANUAL topics.
  */
 import { prisma } from "@/lib/db";
 import { enqueueJob } from "@/lib/jobs/queue";
-import type { IngestionCadence } from "@prisma/client";
+import { TopicCadence } from "@prisma/client";
 
 const GLOBAL_LIMIT_CAP = 100;
 const PER_ORG_LIMIT_CAP = 25;
@@ -19,50 +20,30 @@ function pad2(n: number): string {
   return n.toString().padStart(2, "0");
 }
 
-function buildCadenceKeySuffix(
-  cadence: IngestionCadence,
-  date: Date
-): string {
+function buildCadenceKeySuffix(cadence: TopicCadence, date: Date): string {
   const year = date.getUTCFullYear();
   const month = pad2(date.getUTCMonth() + 1);
   const day = pad2(date.getUTCDate());
   const hour = pad2(date.getUTCHours());
-
   switch (cadence) {
     case "HOURLY":
-      return `${year}${month}${day}${hour}`; // YYYYMMDDHH
+      return `${year}${month}${day}${hour}`;
     case "DAILY":
-      return `${year}${month}${day}`;        // YYYYMMDD
-    case "WEEKLY":
-      // Simple and stable weekly key based on ISO week start (Monday)
-      const d = new Date(Date.UTC(year, date.getUTCMonth(), date.getUTCDate()));
-      const dayOfWeek = d.getUTCDay() || 7; // Sunday=7
-      d.setUTCDate(d.getUTCDate() - dayOfWeek + 1); // Move to Monday
-      const weekYear = d.getUTCFullYear();
-      const weekMonth = pad2(d.getUTCMonth() + 1);
-      const weekDay = pad2(d.getUTCDate());
-      return `${weekYear}${weekMonth}${weekDay}`; // YYYYMMDD of week start
+    case "MANUAL":
+      return `${year}${month}${day}`;
     default:
       return `${year}${month}${day}`;
   }
 }
 
-/**
- * Compute next ingest time from a given date based on cadence.
- * Uses UTC date arithmetic.
- */
-export function computeNextIngestAt(
-  cadence: IngestionCadence,
-  from: Date
-): Date {
+function computeNextRunAt(cadence: TopicCadence, from: Date): Date | null {
+  if (cadence === "MANUAL") return null;
   const ms = from.getTime();
   switch (cadence) {
     case "HOURLY":
       return new Date(ms + 60 * 60 * 1000);
     case "DAILY":
       return new Date(ms + 24 * 60 * 60 * 1000);
-    case "WEEKLY":
-      return new Date(ms + 7 * 24 * 60 * 60 * 1000);
     default:
       return new Date(ms + 24 * 60 * 60 * 1000);
   }
@@ -105,21 +86,19 @@ export async function enqueueDueTopicIngestion(
 
   const where = {
     isIngestionEnabled: true,
-    OR: [
-      { nextIngestAt: null },
-      { nextIngestAt: { lte: now } },
-    ],
+    cadence: { in: [TopicCadence.HOURLY, TopicCadence.DAILY] },
+    OR: [{ nextRunAt: null }, { nextRunAt: { lte: now } }],
     ...(params.organizationId ? { organizationId: params.organizationId } : {}),
   };
 
   const topics = await prisma.topic.findMany({
     where,
-    orderBy: [{ nextIngestAt: "asc" }, { createdAt: "asc" }],
+    orderBy: [{ nextRunAt: "asc" }, { createdAt: "asc" }],
     take: globalLimit,
     select: {
       id: true,
       organizationId: true,
-      ingestionCadence: true,
+      cadence: true,
     },
   });
 
@@ -148,7 +127,7 @@ export async function enqueueDueTopicIngestion(
       if (totalProcessed >= globalLimit) break;
       totalProcessed++;
 
-      const suffix = buildCadenceKeySuffix(topic.ingestionCadence, now);
+      const suffix = buildCadenceKeySuffix(topic.cadence, now);
       const idempotencyKey = `INGEST_TOPIC:${topic.id}:${suffix}`;
 
       const existingJob = await prisma.backgroundJob.findFirst({
@@ -172,10 +151,10 @@ export async function enqueueDueTopicIngestion(
         enqueued++;
       }
 
-      const nextIngestAt = computeNextIngestAt(topic.ingestionCadence, now);
+      const nextRunAt = computeNextRunAt(topic.cadence, now);
       await prisma.topic.updateMany({
         where: { id: topic.id, organizationId: topic.organizationId },
-        data: { lastIngestAt: now, nextIngestAt },
+        data: { nextRunAt },
       });
       updatedTopics++;
     }

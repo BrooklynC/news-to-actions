@@ -1,5 +1,6 @@
 "use server";
 
+import { z } from "zod";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { executeGenerateActionsForArticle } from "@/lib/domain/generateActions";
@@ -187,6 +188,115 @@ export async function enqueueIngestTopicJob(topicId: string) {
       idempotencyKey: `INGEST_TOPIC:${id}`,
     });
     redirect(`${ARTICLES}?message=` + encodeURIComponent("Ingest job queued."));
+  });
+}
+
+async function computeNextRunAtForCadence(
+  cadence: "HOURLY" | "DAILY" | "MANUAL"
+): Promise<Date | null> {
+  const now = Date.now();
+  if (cadence === "MANUAL") return null;
+  if (cadence === "HOURLY") return new Date(now + 60 * 60 * 1000);
+  return new Date(now + 24 * 60 * 60 * 1000);
+}
+
+export async function updateTopicCadence(formData: FormData) {
+  return safeAction(async () => {
+    const org = await getOrgAndRedirect();
+    const topicId = String(formData.get("topicId") ?? "").trim();
+    const cadence = String(formData.get("cadence") ?? "").trim() as
+      | "HOURLY"
+      | "DAILY"
+      | "MANUAL";
+    if (!topicId)
+      redirect(`${ARTICLES}?error=` + encodeURIComponent("topicId is required."));
+    if (!["HOURLY", "DAILY", "MANUAL"].includes(cadence))
+      redirect(`${ARTICLES}?error=` + encodeURIComponent("Invalid cadence."));
+
+    const topic = await prisma.topic.findFirst({
+      where: { id: topicId, organizationId: org.id },
+      select: { id: true },
+    });
+    if (!topic)
+      redirect(`${ARTICLES}?error=` + encodeURIComponent("Topic not found."));
+
+    const nextRunAt = await computeNextRunAtForCadence(cadence);
+    await prisma.topic.update({
+      where: { id: topic.id },
+      data: { cadence, nextRunAt, updatedAt: new Date() },
+    });
+    redirect(`${ARTICLES}?message=` + encodeURIComponent("Cadence updated."));
+  });
+}
+
+const RecipeTypeSchema = z.enum([
+  "EXEC_BRIEF",
+  "MARKETING_ANGLES",
+  "COMPLIANCE_FLAGS",
+  "SALES_PROSPECTING",
+  "PRODUCT_SIGNALS",
+]);
+
+export async function updateTopicRecipe(formData: FormData) {
+  return safeAction(async () => {
+    const org = await getOrgAndRedirect();
+    const topicId = String(formData.get("topicId") ?? "").trim();
+    const recipeResult = RecipeTypeSchema.safeParse(
+      String(formData.get("recipeType") ?? "").trim()
+    );
+    if (!topicId)
+      redirect(`${ARTICLES}?error=` + encodeURIComponent("topicId is required."));
+    if (!recipeResult.success)
+      redirect(
+        `${ARTICLES}?error=` + encodeURIComponent("Invalid recipe type.")
+      );
+
+    const topic = await prisma.topic.findFirst({
+      where: { id: topicId, organizationId: org.id },
+      select: { id: true },
+    });
+    if (!topic)
+      redirect(`${ARTICLES}?error=` + encodeURIComponent("Topic not found."));
+
+    await prisma.topic.update({
+      where: { id: topic.id },
+      data: { recipeType: recipeResult.data, updatedAt: new Date() },
+    });
+    redirect(`${ARTICLES}?message=` + encodeURIComponent("Recipe updated."));
+  });
+}
+
+export async function runTopicNow(formData: FormData) {
+  return safeAction(async () => {
+    const org = await getOrgAndRedirect();
+    const topicId = String(formData.get("topicId") ?? "").trim();
+    if (!topicId)
+      redirect(`${ARTICLES}?error=` + encodeURIComponent("topicId is required."));
+
+    const topic = await prisma.topic.findFirst({
+      where: { id: topicId, organizationId: org.id },
+      select: { id: true, cadence: true },
+    });
+    if (!topic)
+      redirect(`${ARTICLES}?error=` + encodeURIComponent("Topic not found."));
+
+    const idempotencyKey = `INGEST_TOPIC:${topicId}:manual:${Date.now()}`;
+    await enqueueJob({
+      organizationId: org.id,
+      type: "INGEST_TOPIC",
+      payload: { topicId },
+      idempotencyKey,
+    });
+
+    if (topic.cadence !== "MANUAL") {
+      const nextRunAt = await computeNextRunAtForCadence(topic.cadence);
+      await prisma.topic.update({
+        where: { id: topic.id },
+        data: { nextRunAt, updatedAt: new Date() },
+      });
+    }
+
+    redirect(`${ARTICLES}?message=` + encodeURIComponent("Ingest queued."));
   });
 }
 

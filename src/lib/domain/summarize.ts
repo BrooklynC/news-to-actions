@@ -40,7 +40,7 @@ export async function executeSummarizeArticle(
       messages: [
         {
           role: "user",
-          content: `Summarize this article in 5-8 concise bullet points. Max ~120 words. Return plain text only, no markdown.\n\n${content}`,
+          content: `Summarize this article in 3-5 bullet lines. Max ~120 words. Each line starts with "- " and is one sentence. Plain text only, no markdown.\n\n${content}`,
         },
       ],
     });

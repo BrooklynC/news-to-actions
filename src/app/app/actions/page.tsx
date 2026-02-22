@@ -188,17 +188,16 @@ export default async function ActionsPage({
 
           {actionItems.length === 0 ? (
             <Card className="rounded-3xl py-16 text-center">
-              <p className="text-base font-medium text-zinc-600 dark:text-zinc-400">
-                No action items yet
+              <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+                No actions yet.
               </p>
-              <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-500">
+              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-500">
                 <Link
                   href="/app/articles"
                   className="font-medium text-zinc-900 underline hover:no-underline dark:text-zinc-200"
                 >
-                  Generate actions from articles
+                  Generate from articles
                 </Link>
-                {" "}to see them here.
               </p>
             </Card>
           ) : (

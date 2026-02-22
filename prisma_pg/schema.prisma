@@ -31,24 +31,63 @@ enum JobStatus {
   CANCELED
 }
 
+enum RunStatus {
+  SUCCEEDED
+  FAILED
+}
+
 enum IngestionCadence {
   HOURLY
   DAILY
   WEEKLY
 }
 
+enum TopicCadence {
+  HOURLY
+  DAILY
+  MANUAL
+}
+
+enum RecipeType {
+  EXEC_BRIEF
+  MARKETING_ANGLES
+  COMPLIANCE_FLAGS
+  SALES_PROSPECTING
+  PRODUCT_SIGNALS
+}
+
+enum DigestCadence {
+  OFF
+  DAILY
+  WEEKLY
+}
+
 model Organization {
-  id           String         @id @default(cuid())
-  clerkOrgId   String         @unique
-  name         String
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  memberships  Membership[]
-  topics       Topic[]
-  personas     Persona[]
-  articles     Article[]
-  actionItems  ActionItem[]
-  backgroundJobs BackgroundJob[]
+  id                    String                 @id @default(cuid())
+  clerkOrgId            String                 @unique
+  name                  String
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  memberships           Membership[]
+  topics                Topic[]
+  personas              Persona[]
+  articles              Article[]
+  actionItems           ActionItem[]
+  backgroundJobs        BackgroundJob[]
+  notificationSettings  NotificationSettings?
+}
+
+model NotificationSettings {
+  id              String        @id @default(cuid())
+  organizationId  String        @unique
+  slackWebhookUrl String?
+  slackChannel    String?
+  emailRecipients String?
+  digestCadence   DigestCadence @default(OFF)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 model User {
@@ -86,6 +125,9 @@ model Topic {
   nextIngestAt       DateTime?
   lastIngestAt       DateTime?
   ingestEveryMinutes Int?
+  cadence            TopicCadence     @default(HOURLY)
+  nextRunAt          DateTime?
+  recipeType         RecipeType       @default(EXEC_BRIEF)
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
   organization       Organization     @relation(fields: [organizationId], references: [id])
@@ -94,6 +136,7 @@ model Topic {
 
   @@unique([organizationId, name])
   @@index([organizationId, isIngestionEnabled, nextIngestAt])
+  @@index([organizationId, cadence, nextRunAt])
 }
 
 model Persona {
@@ -201,10 +244,31 @@ model BackgroundJob {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  runs         BackgroundJobRun[]
 
   @@unique([organizationId, idempotencyKey])
   @@index([organizationId])
   @@index([organizationId, status, runAt])
   @@index([status])
+}
+
+model BackgroundJobRun {
+  id               String     @id @default(cuid())
+  organizationId   String
+  backgroundJobId  String?
+  jobType          JobType
+  status           RunStatus
+  attemptNumber    Int
+  startedAt        DateTime   @default(now())
+  finishedAt       DateTime?
+  durationMs       Int?
+  errorMessage     String?
+  createdAt        DateTime   @default(now())
+
+  backgroundJob BackgroundJob? @relation(fields: [backgroundJobId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, startedAt])
+  @@index([organizationId, status, startedAt])
+  @@index([backgroundJobId, startedAt])
 }

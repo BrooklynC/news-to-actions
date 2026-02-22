@@ -100,6 +100,10 @@ export async function fetchArticlesForTopic(formData: FormData) {
       }
     }
   }
+  await prisma.topic.update({
+    where: { id: topic.id },
+    data: { lastIngestAt: new Date(), updatedAt: new Date() },
+  });
   redirect(ARTICLES);
 }
 

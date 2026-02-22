@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
 import { AppNav } from "./AppNav";
+import { getJobFailureSummary } from "./observability/actions";
 
-export default function AppLayout({
+export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const { failedCount } = await getJobFailureSummary({ sinceHours: 24 });
+
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <header className="border-b border-zinc-200/70 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -21,7 +24,7 @@ export default function AppLayout({
             </span>
           </Link>
           <div className="flex items-center gap-4 sm:gap-6">
-            <AppNav />
+            <AppNav failureCount={failedCount} />
             <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
             <OrganizationSwitcher
               afterCreateOrganizationUrl="/app/articles"

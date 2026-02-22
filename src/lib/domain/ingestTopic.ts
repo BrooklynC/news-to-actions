@@ -51,4 +51,9 @@ export async function executeIngestTopic(
       }
     }
   }
+
+  await prisma.topic.update({
+    where: { id: topic.id },
+    data: { lastIngestAt: new Date(), updatedAt: new Date() },
+  });
 }

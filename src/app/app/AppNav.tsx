@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-export function AppNav() {
+export function AppNav({ failureCount = 0 }: { failureCount?: number }) {
   const pathname = usePathname();
 
   const linkClass = (path: string) =>
@@ -20,6 +20,23 @@ export function AppNav() {
       </Link>
       <Link href="/app/actions" className={linkClass("/app/actions")}>
         Actions
+      </Link>
+      <Link href="/app/settings/notifications" className={linkClass("/app/settings/notifications")}>
+        Settings
+      </Link>
+      <Link
+        href="/app/observability"
+        className={`relative ${linkClass("/app/observability")}`}
+      >
+        Jobs
+        {failureCount > 0 && (
+          <span
+            className="absolute -right-1 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"
+            aria-label={`${failureCount} job failures`}
+          >
+            {failureCount > 99 ? "99+" : failureCount}
+          </span>
+        )}
       </Link>
     </nav>
   );

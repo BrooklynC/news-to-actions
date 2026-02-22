@@ -2,6 +2,7 @@
  * Domain logic for generating action items from an article.
  * Throws on failure; used by both server action (wraps with redirect) and job runner.
  */
+import type { RecipeType } from "@prisma/client";
 import { ActionItemListSchema } from "@/lib/ai-schemas";
 import { prisma } from "@/lib/db";
 import { enforceCaps } from "@/lib/guardrails/caps";
@@ -12,15 +13,41 @@ import {
 import { getOpenAIClient } from "@/lib/openai";
 import { checkAndRecordAiUsage } from "@/lib/usage/limits";
 
+function getRecipeGuidance(recipeType: RecipeType): string {
+  switch (recipeType) {
+    case "EXEC_BRIEF":
+      return "Focus on what happened, why it matters, decisions/risks.";
+    case "MARKETING_ANGLES":
+      return "Focus on positioning, messaging hooks, campaign ideas, audience angles.";
+    case "COMPLIANCE_FLAGS":
+      return "Focus on regulatory, operational risk, policy updates, watch items (flags only, no legal advice).";
+    case "SALES_PROSPECTING":
+      return "Focus on outreach angles, questions to ask, triggers, account planning ideas.";
+    case "PRODUCT_SIGNALS":
+      return "Focus on roadmap implications, competitor moves, feature gaps, integration ideas.";
+    default:
+      return "Focus on what happened, why it matters, decisions/risks.";
+  }
+}
+
 export async function executeGenerateActionsForArticle(
   organizationId: string,
   articleId: string
 ): Promise<number> {
   const article = await prisma.article.findFirst({
     where: { id: articleId, organizationId },
-    select: { id: true, topicId: true, title: true, url: true, summary: true },
+    select: {
+      id: true,
+      topicId: true,
+      title: true,
+      url: true,
+      summary: true,
+      topic: { select: { recipeType: true } },
+    },
   });
   if (!article) throw new Error("Article not found");
+
+  const recipeType = article.topic?.recipeType ?? "EXEC_BRIEF";
 
   const capArticle = await enforceCaps({
     organizationId,
@@ -56,6 +83,8 @@ export async function executeGenerateActionsForArticle(
   if (content.length > 6000)
     content = content.slice(0, 6000) + "\n[...truncated]";
 
+  const recipeGuidance = getRecipeGuidance(recipeType);
+
   let completion;
   try {
     completion = await getOpenAIClient().chat.completions.create({
@@ -63,7 +92,7 @@ export async function executeGenerateActionsForArticle(
       messages: [
         {
           role: "user",
-          content: `For each persona below, generate 1-2 concrete next steps based on this article.\n\nOutput JSON ONLY. No markdown. No prose.\nFormat: [{"title":"...","description":"...","dueDate":"...","priority":"LOW|MEDIUM|HIGH","sourceUrl":"..."}]\n\nPersonas:\n${personaList}\n\n${content}`,
+          content: `For each persona below, generate 3–7 concrete next steps based on this article.\n\nRecipe focus: ${recipeGuidance}\n\nOutput JSON ONLY. No markdown. No prose.\nFormat: [{"title":"...","description":"...","dueDate":"...","priority":"LOW|MEDIUM|HIGH","sourceUrl":"..."}]\n\nRules: title <= 60 chars, 1 line, start with a verb when possible. No trailing punctuation. Each action specific and doable.\n\nPersonas:\n${personaList}\n\n${content}`,
         },
       ],
     });
