@@ -4,6 +4,10 @@ import { z } from "zod";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import {
+  parseEmailRecipients,
+  formatEmailRecipientsForStorage,
+} from "./utils";
 
 const SETTINGS_URL = "/app/settings/notifications";
 
@@ -23,23 +27,6 @@ export type NotificationSettingsData = {
   emailRecipients: string[];
   digestCadence: "OFF" | "DAILY" | "WEEKLY";
 };
-
-/** Parse stored JSON array of emails into string[]. */
-export function parseEmailRecipients(raw: string | null): string[] {
-  if (!raw?.trim()) return [];
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((e): e is string => typeof e === "string" && e.trim().length > 0);
-  } catch {
-    return [];
-  }
-}
-
-/** Format string[] into JSON array string for storage. */
-export function formatEmailRecipientsForStorage(emails: string[]): string {
-  return JSON.stringify(emails.filter((e) => e.trim().length > 0));
-}
 
 export async function getNotificationSettings(): Promise<NotificationSettingsData | null> {
   const org = await getOrgId();
