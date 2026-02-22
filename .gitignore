@@ -41,3 +41,6 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# Prisma backups
+prisma/_backup_sqlite_migrations/
