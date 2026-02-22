@@ -29,6 +29,29 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
+## Environment Variables
+
+| Variable       | Description                                                                 |
+|----------------|-----------------------------------------------------------------------------|
+| `DATABASE_URL` | Prisma database URL (e.g. `file:./dev.db` for SQLite)                       |
+| `CRON_SECRET`  | Secret for authenticating cron job requests. Required for `/api/cron/run-jobs`. Generate with `openssl rand -hex 32`. |
+
+For Vercel Cron, set `CRON_SECRET` in project settings. Vercel will send it as `Authorization: Bearer <secret>` when invoking the cron route.
+
+## Cron: Background Jobs
+
+A cron route runs queued background jobs. Configure `vercel.json` crons (every 15 min by default). Set `CRON_SECRET` in Vercel env vars.
+
+**Manual test (local):**
+```bash
+curl -H "x-cron-secret: <your-secret>" "http://localhost:3000/api/cron/run-jobs?limit=10"
+```
+
+**Query params:**
+- `orgId` (optional) – process only this org
+- `limit` (default 25, max 50) – global job cap
+- `perOrg` (default 10, max 25) – cap per org in multi-org mode
+
 ## Deploy on Vercel
 
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.

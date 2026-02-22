@@ -1,0 +1,214 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum ActionStatus {
+  OPEN
+  DONE
+  DISMISSED
+}
+
+enum JobType {
+  INGEST_TOPIC
+  SUMMARIZE_ARTICLE
+  GENERATE_ACTIONS_FOR_ARTICLE
+  NOTIFY
+  RUN_RECIPE
+}
+
+enum JobStatus {
+  QUEUED
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELED
+}
+
+enum IngestionCadence {
+  HOURLY
+  DAILY
+  WEEKLY
+}
+
+model Organization {
+  id           String         @id @default(cuid())
+  clerkOrgId   String         @unique
+  name         String
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  memberships  Membership[]
+  topics       Topic[]
+  personas     Persona[]
+  articles     Article[]
+  actionItems  ActionItem[]
+  backgroundJobs BackgroundJob[]
+}
+
+model User {
+  id                   String           @id @default(cuid())
+  clerkUserId          String           @unique
+  email                String?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  memberships          Membership[]
+  assignedActionItems  ActionItem[]     @relation("ActionItemAssignee")
+  actionItemAudits     ActionItemAudit[]
+}
+
+model Membership {
+  id             String       @id @default(cuid())
+  userId         String
+  organizationId String
+  role           String
+  createdAt      DateTime     @default(now())
+  user           User         @relation(fields: [userId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([userId])
+  @@index([organizationId])
+  @@unique([userId, organizationId])
+}
+
+model Topic {
+  id                 String           @id @default(cuid())
+  organizationId     String
+  name               String
+  query              String
+  ingestionCadence   IngestionCadence @default(DAILY)
+  isIngestionEnabled Boolean          @default(true)
+  nextIngestAt       DateTime?
+  lastIngestAt       DateTime?
+  ingestEveryMinutes Int?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  organization       Organization     @relation(fields: [organizationId], references: [id])
+  articles           Article[]
+  actionItems        ActionItem[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, isIngestionEnabled, nextIngestAt])
+}
+
+model Persona {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  actionItems    ActionItem[]
+
+  @@unique([organizationId, name])
+}
+
+model Article {
+  id             String    @id @default(cuid())
+  organizationId String
+  topicId        String
+  url            String
+  title          String
+  source         String?
+  publishedAt    DateTime?
+  summary        String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  topic          Topic     @relation(fields: [topicId], references: [id])
+  actionItems    ActionItem[]
+
+  @@unique([organizationId, url])
+  @@index([organizationId, topicId])
+  @@index([publishedAt])
+}
+
+model ActionItem {
+  id              String       @id @default(cuid())
+  organizationId  String
+  articleId       String?
+  topicId         String?
+  personaId       String?
+  assigneeUserId  String?
+  text            String
+  normalizedTitle String
+  status          ActionStatus @default(OPEN)
+  priority        String?
+  dueDate         String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  article         Article?     @relation(fields: [articleId], references: [id])
+  topic           Topic?       @relation(fields: [topicId], references: [id])
+  persona         Persona?     @relation(fields: [personaId], references: [id])
+  assigneeUser    User?        @relation("ActionItemAssignee", fields: [assigneeUserId], references: [id])
+  audits          ActionItemAudit[]
+
+  @@unique([organizationId, articleId, normalizedTitle])
+  @@index([organizationId])
+  @@index([articleId])
+  @@index([topicId])
+}
+
+model ActionItemAudit {
+  id           String    @id @default(cuid())
+  actionItemId String
+  actorUserId  String?
+  field        String
+  oldValue     String?
+  newValue     String?
+  createdAt    DateTime  @default(now())
+
+  actionItem ActionItem @relation(fields: [actionItemId], references: [id], onDelete: Cascade)
+  actorUser  User?      @relation(fields: [actorUserId], references: [id])
+
+  @@index([actionItemId, createdAt])
+}
+model UsageEvent {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String?  // optional, useful later even if org-scoped now
+  action         UsageAction
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, action, createdAt])
+}
+
+enum UsageAction {
+  SUMMARIZE
+  GENERATE_ACTIONS
+}
+
+model BackgroundJob {
+  id             String    @id @default(cuid())
+  organizationId String
+  type           JobType
+  status         JobStatus @default(QUEUED)
+  payloadJson    String
+  idempotencyKey String
+  runAt          DateTime  @default(now())
+  attempts       Int       @default(0)
+  maxAttempts    Int       @default(3)
+  lockedAt       DateTime?
+  lockedBy       String?
+  lastError      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId])
+  @@index([organizationId, status, runAt])
+  @@index([status])
+}

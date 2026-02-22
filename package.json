@@ -9,9 +9,16 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@clerk/nextjs": "^6.38.1",
+    "@prisma/client": "6.19.2",
+    "inngest": "^3.52.3",
     "next": "16.1.6",
+    "openai": "^6.22.0",
+    "prisma": "6.19.2",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "rss-parser": "^3.13.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
