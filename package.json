@@ -11,8 +11,9 @@
     "prisma:generate:sqlite": "prisma generate --schema=prisma/schema.sqlite.prisma",
     "prisma:migrate:sqlite": "prisma migrate dev --schema=prisma/schema.sqlite.prisma",
     "prisma:studio:sqlite": "prisma studio --schema=prisma/schema.sqlite.prisma",
-    "prisma:generate:pg": "prisma generate --schema=prisma/schema.postgres.prisma",
-    "prisma:migrate:pg": "prisma migrate deploy --schema=prisma/schema.postgres.prisma"
+    "prisma:generate:pg": "prisma generate --schema=prisma_pg/schema.prisma",
+    "prisma:migrate:pg:dev": "cross-env PRISMA_MIGRATIONS_PATH=prisma_pg prisma migrate dev --schema=prisma_pg/schema.prisma --name init_pg --create-only",
+    "prisma:migrate:pg:deploy": "cross-env PRISMA_MIGRATIONS_PATH=prisma_pg prisma migrate deploy --schema=prisma_pg/schema.prisma"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.38.1",
@@ -33,6 +34,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "cross-env": "^7.0.3"
   }
 }

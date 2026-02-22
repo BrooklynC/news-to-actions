@@ -1,12 +1,12 @@
 // PostgreSQL schema for production (Vercel/Neon)
+// Uses prisma/migrations_pg/migrations for its migration history
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 enum ActionStatus {

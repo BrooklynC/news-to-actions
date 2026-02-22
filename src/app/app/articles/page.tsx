@@ -1,7 +1,8 @@
 import { Banner } from "@/components/ui/Banner";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { ArticleActionsClient } from "./ArticleActionsClient";
+import { ArticleSummarizeButton } from "./ArticleSummarizeButton";
+import { ArticleGenerateButton } from "./ArticleGenerateButton";
 import {
   generateActions,
   runJobsNow,
@@ -377,11 +378,16 @@ export default async function ArticlesPage({
                   )}
                 </div>
 
-                <ArticleActionsClient
-                  articleId={a.id}
-                  summarizeArticle={summarizeArticle}
-                  generateActions={generateActions}
-                />
+                <div className="mt-4 flex flex-wrap items-center justify-end gap-3 border-t border-zinc-100/80 pt-4 dark:border-zinc-700">
+                  <form action={summarizeArticle} className="inline-flex">
+                    <input type="hidden" name="articleId" value={a.id} />
+                    <ArticleSummarizeButton />
+                  </form>
+                  <form action={generateActions} className="inline-flex">
+                    <input type="hidden" name="articleId" value={a.id} />
+                    <ArticleGenerateButton />
+                  </form>
+                </div>
               </Card>
             </li>
           ))}
