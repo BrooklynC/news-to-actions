@@ -3,10 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --no-turbo",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "prisma generate --schema=prisma/schema.prisma",
+    "prisma:generate:sqlite": "prisma generate --schema=prisma/schema.sqlite.prisma",
+    "prisma:migrate:sqlite": "prisma migrate dev --schema=prisma/schema.sqlite.prisma",
+    "prisma:studio:sqlite": "prisma studio --schema=prisma/schema.sqlite.prisma",
+    "prisma:generate:pg": "prisma generate --schema=prisma/schema.postgres.prisma",
+    "prisma:migrate:pg": "prisma migrate deploy --schema=prisma/schema.postgres.prisma"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.38.1",
@@ -17,8 +23,7 @@
     "prisma": "6.19.2",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "rss-parser": "^3.13.0",
-    "zod": "^4.3.6"
+    "rss-parser": "^3.13.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

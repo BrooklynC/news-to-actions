@@ -1,15 +1,10 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
+// SQLite schema for local development
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -176,7 +171,7 @@ model ActionItemAudit {
 model UsageEvent {
   id             String   @id @default(cuid())
   organizationId String
-  userId         String?  // optional, useful later even if org-scoped now
+  userId         String?
   action         UsageAction
   createdAt      DateTime @default(now())
 

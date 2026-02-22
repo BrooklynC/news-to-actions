@@ -9,7 +9,7 @@ import {
   dedupeByNormalizedText,
   normalizeActionText,
 } from "@/lib/guardrails/dedupe";
-import { openai } from "@/lib/openai";
+import { getOpenAIClient } from "@/lib/openai";
 import { checkAndRecordAiUsage } from "@/lib/usage/limits";
 
 export async function executeGenerateActionsForArticle(
@@ -58,7 +58,7 @@ export async function executeGenerateActionsForArticle(
 
   let completion;
   try {
-    completion = await openai.chat.completions.create({
+    completion = await getOpenAIClient().chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {

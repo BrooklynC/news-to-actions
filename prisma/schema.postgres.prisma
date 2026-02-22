@@ -1,16 +1,12 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
+// PostgreSQL schema for production (Vercel/Neon)
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum ActionStatus {
@@ -176,7 +172,7 @@ model ActionItemAudit {
 model UsageEvent {
   id             String   @id @default(cuid())
   organizationId String
-  userId         String?  // optional, useful later even if org-scoped now
+  userId         String?
   action         UsageAction
   createdAt      DateTime @default(now())
 
