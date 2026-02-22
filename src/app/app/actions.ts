@@ -86,6 +86,36 @@ export async function generateActions(formData: FormData) {
   });
 }
 
+export async function createTopicFromForm(formData: FormData) {
+  const { orgId: clerkOrgId } = await auth();
+  if (!clerkOrgId)
+    redirect(`${ARTICLES}?error=` + encodeURIComponent("No organization selected."));
+
+  const org = await prisma.organization.findUnique({
+    where: { clerkOrgId },
+    select: { id: true },
+  });
+  if (!org)
+    redirect(`${ARTICLES}?error=` + encodeURIComponent("No organization selected."));
+
+  const name = String(formData.get("name") ?? "").trim();
+  const query = String(formData.get("query") ?? "").trim();
+  if (!name || !query)
+    redirect(`${ARTICLES}?error=` + encodeURIComponent("name and query are required"));
+
+  try {
+    await prisma.topic.create({
+      data: { organizationId: org.id, name, query },
+    });
+  } catch (e: unknown) {
+    if (e && typeof e === "object" && "code" in e && (e as { code: string }).code === "P2002") {
+      redirect(`${ARTICLES}?error=` + encodeURIComponent(`Topic "${name}" already exists.`));
+    }
+    throw e;
+  }
+  redirect(ARTICLES);
+}
+
 // --- Job queue server actions ---
 
 export async function enqueueSummarizeJob(articleId: string) {
