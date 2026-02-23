@@ -1,5 +1,6 @@
 import { Banner } from "@/components/ui/Banner";
 import { Card } from "@/components/ui/Card";
+import { formatRelativeTime } from "@/lib/time";
 import { ClampText } from "@/components/ui/ClampText";
 import { BulletedText } from "@/components/ui/BulletedText";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -49,6 +50,7 @@ export default async function ArticlesPage({
       source: string | null;
       publishedAt: Date | null;
       summary: string | null;
+      createdAt: Date;
       _count: { actionItems: number };
       actionItems: { id: string; text: string; persona: { id: string; name: string } | null }[];
     }[];
@@ -76,6 +78,7 @@ export default async function ArticlesPage({
                 source: true,
                 publishedAt: true,
                 summary: true,
+                createdAt: true,
                 _count: { select: { actionItems: true } },
                 actionItems: {
                   where: { status: "OPEN" },
@@ -110,13 +113,20 @@ export default async function ArticlesPage({
   );
   const hasAnyArticles = allArticles.length > 0;
 
+  const now = new Date();
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <PageHeader
-          title="Articles"
-          subtitle="Get the summary and the next steps in one place."
-        />
+        <div>
+          <PageHeader
+            title="Articles"
+            subtitle="Get the summary and the next steps in one place."
+          />
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            Updated · {formatRelativeTime(now)}
+          </p>
+        </div>
         {orgId && (
           <IngestCardServer
             topics={topics.map((t) => ({
@@ -226,13 +236,14 @@ export default async function ArticlesPage({
                     <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
                       {a.topicName}
                     </span>
-                    {a.publishedAt && (
-                      <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                        {new Date(a.publishedAt).toLocaleDateString()}
-                      </span>
-                    )}
                   </div>
                 </div>
+                <p className="mt-1 truncate text-xs text-zinc-500 dark:text-zinc-400">
+                  Added · {formatRelativeTime(a.createdAt)}
+                  {a.publishedAt != null && (
+                    <> · Published · {formatRelativeTime(a.publishedAt)}</>
+                  )}
+                </p>
 
                 <div className="mt-4 flex flex-wrap items-center gap-4 text-xs">
                   <span className="flex items-center gap-1.5">

@@ -1,5 +1,9 @@
 import { Card } from "@/components/ui/Card";
 import {
+  formatRelativeTime,
+  formatRelativeFutureTime,
+} from "@/lib/time";
+import {
   createTopicFromForm,
   runMyOrgJobs,
   updateTopicCadence,
@@ -10,22 +14,6 @@ import {
   createPersona,
   fetchArticlesForTopic,
 } from "@/app/app/server-actions";
-
-function formatRelativePast(d: Date): string {
-  const sec = Math.floor((Date.now() - d.getTime()) / 1000);
-  if (sec < 60) return "just now";
-  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
-  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
-  return `${Math.floor(sec / 86400)}d ago`;
-}
-
-function formatRelativeFuture(d: Date): string {
-  const sec = Math.floor((d.getTime() - Date.now()) / 1000);
-  if (sec < 60) return "soon";
-  if (sec < 3600) return `in ${Math.floor(sec / 60)}m`;
-  if (sec < 86400) return `in ${Math.floor(sec / 3600)}h`;
-  return `in ${Math.floor(sec / 86400)}d`;
-}
 
 const RECIPE_LABELS: Record<string, string> = {
   EXEC_BRIEF: "Exec Brief",
@@ -115,15 +103,13 @@ export function IngestCardServer({ topics, personasCount }: Props) {
                       {RECIPE_LABELS[t.recipeType] ?? t.recipeType}
                     </span>
                     <span title={t.lastIngestAt?.toISOString()}>
-                      Last: {t.lastIngestAt ? formatRelativePast(t.lastIngestAt) : "Never"}
+                      Last · {t.lastIngestAt ? formatRelativeTime(t.lastIngestAt) : "Never"}
                     </span>
                     <span title={t.nextRunAt?.toISOString()}>
-                      Next:{" "}
+                      Next ·{" "}
                       {t.cadence === "MANUAL"
                         ? "Manual only"
-                        : t.nextRunAt
-                          ? formatRelativeFuture(t.nextRunAt)
-                          : "—"}
+                        : formatRelativeFutureTime(t.nextRunAt)}
                     </span>
                   </div>
                 </div>
