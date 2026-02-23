@@ -21,6 +21,77 @@ type RunDates = {
   lastIngestFailureAt: Date | null;
 };
 
+export type TopicQueueState = {
+  queuedAt: Date | null;
+  runningAt: Date | null;
+};
+
+export async function getTopicQueueStateEnrichment(
+  organizationId: string
+): Promise<Map<string, TopicQueueState>> {
+  const [queuedJobs, processingJobs] = await Promise.all([
+    prisma.backgroundJob.findMany({
+      where: {
+        organizationId,
+        type: INGEST_JOB_TYPE,
+        status: "QUEUED",
+      },
+      orderBy: { createdAt: "desc" },
+      take: 500,
+      select: { payloadJson: true, createdAt: true },
+    }),
+    prisma.backgroundJob.findMany({
+      where: {
+        organizationId,
+        type: INGEST_JOB_TYPE,
+        status: "PROCESSING",
+      },
+      orderBy: { lockedAt: "desc" },
+      take: 200,
+      select: { payloadJson: true, lockedAt: true, createdAt: true },
+    }),
+  ]);
+
+  const queuedByTopicId = new Map<string, Date>();
+  for (const j of queuedJobs) {
+    try {
+      const p = JSON.parse(j.payloadJson ?? "{}") as { topicId?: string };
+      const tid = p.topicId;
+      if (tid && typeof tid === "string" && !queuedByTopicId.has(tid))
+        queuedByTopicId.set(tid, j.createdAt);
+    } catch {
+      // ignore
+    }
+  }
+
+  const runningByTopicId = new Map<string, Date>();
+  for (const j of processingJobs) {
+    try {
+      const p = JSON.parse(j.payloadJson ?? "{}") as { topicId?: string };
+      const tid = p.topicId;
+      if (tid && typeof tid === "string" && !runningByTopicId.has(tid)) {
+        const runningAt = j.lockedAt ?? j.createdAt;
+        runningByTopicId.set(tid, runningAt);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const result = new Map<string, TopicQueueState>();
+  const allIds = new Set([
+    ...queuedByTopicId.keys(),
+    ...runningByTopicId.keys(),
+  ]);
+  for (const topicId of allIds) {
+    result.set(topicId, {
+      queuedAt: queuedByTopicId.get(topicId) ?? null,
+      runningAt: runningByTopicId.get(topicId) ?? null,
+    });
+  }
+  return result;
+}
+
 export async function getTopicHealthEnrichment(
   organizationId: string
 ): Promise<Map<string, RunDates>> {
@@ -105,6 +176,21 @@ function computeHealth(
   if (isStale) return "STALE";
 
   return "HEALTHY";
+}
+
+export function enrichTopicsWithQueueState<
+  T extends { id: string },
+>(
+  topics: T[],
+  queueStateByTopicId: Map<string, TopicQueueState>
+): (T & { queuedAt: Date | null; runningAt: Date | null })[] {
+  return topics.map((t) => {
+    const s = queueStateByTopicId.get(t.id) ?? {
+      queuedAt: null,
+      runningAt: null,
+    };
+    return { ...t, queuedAt: s.queuedAt, runningAt: s.runningAt };
+  });
 }
 
 export function enrichTopicsWithHealth<

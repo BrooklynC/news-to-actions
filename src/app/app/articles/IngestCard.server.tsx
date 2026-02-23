@@ -40,6 +40,8 @@ type Topic = {
   lastIngestSuccessAt: Date | null;
   lastIngestFailureAt: Date | null;
   articlesCount?: number;
+  queuedAt?: Date | null;
+  runningAt?: Date | null;
 };
 
 function healthDotColor(health: TopicHealth): string {
@@ -107,6 +109,15 @@ export function IngestCardServer({ topics, personasCount }: Props) {
                     {t.name}
                   </h4>
                   <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+                    {t.runningAt != null ? (
+                      <span className="inline-flex rounded-full bg-blue-50 px-2 py-0.5 font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                        Running…
+                      </span>
+                    ) : t.queuedAt != null ? (
+                      <span className="inline-flex rounded-full bg-zinc-100 px-2 py-0.5 font-medium text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+                        Queued · {formatRelativeTime(t.queuedAt)}
+                      </span>
+                    ) : null}
                     <span
                       className={`inline-flex items-center gap-1 ${
                         t.health === "HEALTHY"

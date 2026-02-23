@@ -21,7 +21,9 @@ import { prisma } from "@/lib/db";
 import { syncDbWithClerk } from "@/lib/sync-clerk";
 import {
   getTopicHealthEnrichment,
+  getTopicQueueStateEnrichment,
   enrichTopicsWithHealth,
+  enrichTopicsWithQueueState,
 } from "@/lib/topics/health";
 import type { TopicHealth } from "@/lib/types/topicHealth";
 import { IngestCardServer } from "./IngestCard.server";
@@ -51,6 +53,8 @@ export default async function ArticlesPage({
     health: TopicHealth;
     lastIngestSuccessAt: Date | null;
     lastIngestFailureAt: Date | null;
+    queuedAt: Date | null;
+    runningAt: Date | null;
     articles: {
       id: string;
       title: string;
@@ -71,7 +75,7 @@ export default async function ArticlesPage({
       select: { id: true },
     });
     if (org) {
-      const [topicsData, personasData, healthEnrichment] = await Promise.all([
+      const [topicsData, personasData, healthEnrichment, queueStateEnrichment] = await Promise.all([
         prisma.topic.findMany({
           where: { organizationId: org.id },
           orderBy: { updatedAt: "desc" },
@@ -102,8 +106,12 @@ export default async function ArticlesPage({
           select: { id: true, name: true },
         }),
         getTopicHealthEnrichment(org.id),
+        getTopicQueueStateEnrichment(org.id),
       ]);
-      topics = enrichTopicsWithHealth(topicsData, healthEnrichment);
+      topics = enrichTopicsWithQueueState(
+        enrichTopicsWithHealth(topicsData, healthEnrichment),
+        queueStateEnrichment
+      );
       personas = personasData;
     }
   }
@@ -150,6 +158,8 @@ export default async function ArticlesPage({
               lastIngestSuccessAt: t.lastIngestSuccessAt ?? null,
               lastIngestFailureAt: t.lastIngestFailureAt ?? null,
               articlesCount: t.articles.length,
+              queuedAt: t.queuedAt ?? null,
+              runningAt: t.runningAt ?? null,
             }))}
             personasCount={personas.length}
           />
