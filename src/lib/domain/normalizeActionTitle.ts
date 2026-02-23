@@ -1,67 +1,57 @@
 /**
  * Normalize action item titles for scan-first display quality.
- * Pure function; no side effects.
+ * Unknown-safe; never throws.
  */
-const MAX_LENGTH = 90;
-const WEAK_PREFIXES = [
-  "consider ",
-  "evaluate ",
-  "review ",
-  "look into ",
-  "explore ",
-  "assess ",
-  "determine whether ",
-  "investigate ",
-  "decide whether ",
-  "plan to ",
-  "think about ",
-  "review whether ",
-];
+export function normalizeActionTitle(input: unknown): string {
+  const raw = typeof input === "string" ? input : "";
+  let t = raw.trim().replace(/\s+/g, " ");
+  if (!t) return "Action item";
 
-export function normalizeActionTitle(title: string): string {
-  const original = title.trim();
-  if (!original) return "Action item";
+  // strip quotes
+  t = t.replace(/^["']+|["']+$/g, "").trim();
 
-  let s = original.trim().replace(/\s+/g, " ");
+  // strip bullets/numbering
+  t = t.replace(/^(?:[-•]\s+|\d+\s*[\).\:-]\s+)+/i, "").trim();
 
-  // Remove wrapping quotes
-  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
-    s = s.slice(1, -1).trim();
-  }
-
-  // Strip leading bullets / numbering
-  s = s.replace(/^[-•]\s+/, "");
-  s = s.replace(/^\d+[.)]\s*/, "");
-  s = s.replace(/^\d+\s*-\s*/, "");
-  s = s.replace(/^action:\s*/i, "");
-  s = s.replace(/^task:\s*/i, "");
-  s = s.replace(/^next step:\s*/i, "");
-
-  // Remove weak leading phrases (case-insensitive)
-  const lower = s.toLowerCase();
-  for (const prefix of WEAK_PREFIXES) {
-    if (lower.startsWith(prefix)) {
-      s = s.slice(prefix.length).trim();
+  // strip conservative weak prefixes (case-insensitive)
+  const prefixes = [
+    "consider ",
+    "evaluate ",
+    "review ",
+    "look into ",
+    "explore ",
+    "assess ",
+    "investigate ",
+    "determine whether ",
+    "decide whether ",
+    "plan to ",
+    "think about ",
+    "action: ",
+    "task: ",
+    "next step: ",
+  ];
+  const lower = t.toLowerCase();
+  for (const p of prefixes) {
+    if (lower.startsWith(p)) {
+      t = t.slice(p.length).trim();
       break;
     }
   }
+  if (!t) return "Action item";
 
-  // Sentence-case: first char uppercase, rest unchanged
-  if (s.length > 0) {
-    s = s[0].toUpperCase() + s.slice(1);
+  // sentence-case minimal: uppercase first letter
+  t = t.charAt(0).toUpperCase() + t.slice(1);
+
+  // remove trailing period
+  t = t.replace(/\.\s*$/, "");
+
+  // length cap
+  const hardCap = 90;
+  if (t.length > hardCap) {
+    const cut = t.slice(0, hardCap);
+    const lastSpace = cut.lastIndexOf(" ");
+    t = (lastSpace > 40 ? cut.slice(0, lastSpace) : cut).trim() + "…";
   }
 
-  // Remove trailing period
-  s = s.replace(/\.\s*$/, "").trim();
-
-  // Length cap
-  if (s.length > MAX_LENGTH) {
-    const truncated = s.slice(0, MAX_LENGTH);
-    const lastSpace = truncated.lastIndexOf(" ");
-    const cut = lastSpace > MAX_LENGTH / 2 ? lastSpace : MAX_LENGTH;
-    s = truncated.slice(0, cut).trim() + "…";
-  }
-
-  if (!s) return original.trim() || "Action item";
-  return s;
+  return t || "Action item";
 }
