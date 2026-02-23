@@ -1,5 +1,6 @@
 "use server";
 
+import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
@@ -9,6 +10,28 @@ import { normalizeActionText } from "@/lib/guardrails/dedupe";
 
 const ACTIONS = "/app/actions";
 const TITLE_MAX = 120;
+
+function toJsonValue(value: unknown): Prisma.InputJsonValue {
+  if (value === null || value === undefined) return null as unknown as Prisma.InputJsonValue;
+
+  const t = typeof value;
+  if (t === "string" || t === "number" || t === "boolean") return value;
+
+  if (value instanceof Date) return value.toISOString();
+
+  if (Array.isArray(value)) {
+    return value.map((v) => toJsonValue(v)) as unknown as Prisma.InputJsonValue;
+  }
+
+  if (t === "object") {
+    const obj = value as Record<string, unknown>;
+    const out: Record<string, Prisma.InputJsonValue> = {};
+    for (const [k, v] of Object.entries(obj)) out[k] = toJsonValue(v);
+    return out as unknown as Prisma.InputJsonValue;
+  }
+
+  return String(value);
+}
 
 const ActionPrioritySchema = z.enum(["LOW", "MEDIUM", "HIGH"]);
 const ActionStatusSchema = z.enum(["OPEN", "IN_PROGRESS", "DONE", "DISMISSED"]);
@@ -63,19 +86,30 @@ export async function updateActionItem(formData: FormData) {
     : undefined;
   const newNormalizedTitle = title != null ? normalizeActionText(title) : undefined;
 
-  const delta: Record<string, { from: unknown; to: unknown }> = {};
-  if (newText != null && existing.text !== newText) delta.text = { from: existing.text, to: newText };
+  const delta: Record<string, Prisma.InputJsonValue> = {};
+  if (newText != null && existing.text !== newText)
+    delta.text = { from: toJsonValue(existing.text), to: toJsonValue(newText) };
+
   if (newNormalizedTitle != null && existing.normalizedTitle !== newNormalizedTitle)
-    delta.normalizedTitle = { from: existing.normalizedTitle, to: newNormalizedTitle };
-  if (status != null && existing.status !== status) delta.status = { from: existing.status, to: status };
+    delta.normalizedTitle = {
+      from: toJsonValue(existing.normalizedTitle),
+      to: toJsonValue(newNormalizedTitle),
+    };
+
+  if (status != null && existing.status !== status)
+    delta.status = { from: toJsonValue(existing.status), to: toJsonValue(status) };
+
   if (priority != null && existing.priorityLevel !== priority)
-    delta.priorityLevel = { from: existing.priorityLevel, to: priority };
+    delta.priorityLevel = { from: toJsonValue(existing.priorityLevel), to: toJsonValue(priority) };
+
   if (personaId !== undefined && existing.personaId !== personaId)
-    delta.personaId = { from: existing.personaId, to: personaId };
+    delta.personaId = { from: toJsonValue(existing.personaId), to: toJsonValue(personaId) };
+
   if (assigneeUserId !== undefined && existing.assigneeUserId !== assigneeUserId)
-    delta.assigneeUserId = { from: existing.assigneeUserId, to: assigneeUserId };
+    delta.assigneeUserId = { from: toJsonValue(existing.assigneeUserId), to: toJsonValue(assigneeUserId) };
+
   if (dueDate !== undefined && (existing.dueDate ?? null) !== dueDate)
-    delta.dueDate = { from: existing.dueDate, to: dueDate };
+    delta.dueDate = { from: toJsonValue(existing.dueDate), to: toJsonValue(dueDate) };
 
   if (Object.keys(delta).length === 0) redirect(ACTIONS);
 
