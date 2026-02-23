@@ -7,6 +7,7 @@ import {
   getTopicHealthLabel,
   type TopicHealth,
 } from "@/lib/types/topicHealth";
+import Link from "next/link";
 import {
   createTopicFromForm,
   runMyOrgJobs,
@@ -38,6 +39,7 @@ type Topic = {
   health: TopicHealth;
   lastIngestSuccessAt: Date | null;
   lastIngestFailureAt: Date | null;
+  articlesCount?: number;
 };
 
 function healthDotColor(health: TopicHealth): string {
@@ -144,8 +146,13 @@ export function IngestCardServer({ topics, personasCount }: Props) {
                     >
                       {RECIPE_LABELS[t.recipeType] ?? t.recipeType}
                     </span>
-                    <span title={t.lastIngestAt?.toISOString()}>
-                      Last · {t.lastIngestAt ? formatRelativeTime(t.lastIngestAt) : "Never"}
+                    <span title={t.lastIngestSuccessAt?.toISOString() ?? t.lastIngestAt?.toISOString()}>
+                      Last ·{" "}
+                      {t.cadence !== "MANUAL" && t.lastIngestSuccessAt == null
+                        ? "Awaiting first ingest"
+                        : (t.lastIngestSuccessAt ?? t.lastIngestAt)
+                          ? formatRelativeTime(t.lastIngestSuccessAt ?? t.lastIngestAt)
+                          : "—"}
                     </span>
                     <span title={t.nextRunAt?.toISOString() ?? undefined}>
                       Next ·{" "}
@@ -156,6 +163,40 @@ export function IngestCardServer({ topics, personasCount }: Props) {
                           : "Soon"}
                     </span>
                   </div>
+                  {t.cadence === "MANUAL" && (
+                    <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
+                      Manual trigger only
+                    </p>
+                  )}
+                  {t.health === "FAILED" && (
+                    <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                      Recent failure — <Link href="/app/observability" className="underline hover:no-underline">see Jobs</Link>
+                    </p>
+                  )}
+                  {t.articlesCount === 0 && (
+                    <div className="mt-2 rounded-lg border border-zinc-100 bg-zinc-50/50 p-3 dark:border-zinc-700 dark:bg-zinc-800/30">
+                      <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                        No articles yet
+                      </p>
+                      <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-500">
+                        Run this topic to ingest the latest results.
+                      </p>
+                      {t.cadence === "MANUAL" && (
+                        <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-500">
+                          Cadence is Manual.
+                        </p>
+                      )}
+                      <form action={runTopicNow} className="mt-2">
+                        <input type="hidden" name="topicId" value={t.id} />
+                        <button
+                          type="submit"
+                          className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
+                        >
+                          Run now
+                        </button>
+                      </form>
+                    </div>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <form action={runTopicNow} className="inline-flex">

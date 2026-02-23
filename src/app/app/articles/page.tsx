@@ -149,6 +149,7 @@ export default async function ArticlesPage({
               health: t.health,
               lastIngestSuccessAt: t.lastIngestSuccessAt ?? null,
               lastIngestFailureAt: t.lastIngestFailureAt ?? null,
+              articlesCount: t.articles.length,
             }))}
             personasCount={personas.length}
           />
@@ -222,10 +223,10 @@ export default async function ArticlesPage({
       {orgId && !hasAnyArticles && (
         <Card className="rounded-3xl py-16 text-center">
           <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
-            No articles yet.
+            No articles yet
           </p>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-500">
-            Add a topic, then Fetch.
+          <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-500">
+            Run a topic above to ingest the latest results.
           </p>
         </Card>
       )}
