@@ -192,7 +192,18 @@ export async function executeGenerateActionsForArticle(
 
   for (const data of createData) {
     try {
-      await prisma.actionItem.create({ data });
+      await prisma.$transaction(async (tx) => {
+        const created = await tx.actionItem.create({ data });
+        await tx.actionEvent.create({
+          data: {
+            organizationId,
+            actionId: created.id,
+            eventType: "CREATED",
+            actorUserId: null,
+            metadata: { source: "ai" },
+          },
+        });
+      });
     } catch (e: unknown) {
       if (
         e &&

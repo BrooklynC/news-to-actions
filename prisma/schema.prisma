@@ -15,8 +15,30 @@ datasource db {
 
 enum ActionStatus {
   OPEN
+  IN_PROGRESS
   DONE
   DISMISSED
+}
+
+enum ActionPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ActionEventType {
+  CREATED
+  UPDATED
+  STATUS_CHANGED
+  ASSIGNED
+  PRIORITY_CHANGED
+}
+
+enum ActionRecipeType {
+  DEFAULT
+  FOLLOW_UP
+  RESEARCH
+  OUTREACH
 }
 
 enum JobType {
@@ -182,30 +204,56 @@ model Article {
 }
 
 model ActionItem {
-  id              String       @id @default(cuid())
-  organizationId  String
-  articleId       String?
-  topicId         String?
-  personaId       String?
+  id               String           @id @default(cuid())
+  organizationId    String
+  articleId        String?
+  topicId          String?
+  title            String?          // display title; backfilled from text if null
+  description      String?
+  text             String          // legacy: title:description
+  normalizedTitle  String
+  status           ActionStatus     @default(OPEN)
+  priority         String?          // legacy; use priorityLevel when set
+  priorityLevel    ActionPriority?  @default(MEDIUM)
+  personaId        String?
   assigneeUserId  String?
-  text            String
-  normalizedTitle String
-  status          ActionStatus @default(OPEN)
-  priority        String?
-  dueDate         String?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  article         Article?     @relation(fields: [articleId], references: [id])
-  topic           Topic?       @relation(fields: [topicId], references: [id])
-  persona         Persona?     @relation(fields: [personaId], references: [id])
-  assigneeUser    User?        @relation("ActionItemAssignee", fields: [assigneeUserId], references: [id])
-  audits          ActionItemAudit[]
+  dueDate          String?
+  confidenceScore  Float?
+  recipeType       ActionRecipeType?
+  createdByAI      Boolean          @default(true)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  organization     Organization    @relation(fields: [organizationId], references: [id])
+  article          Article?        @relation(fields: [articleId], references: [id])
+  topic            Topic?          @relation(fields: [topicId], references: [id])
+  persona          Persona?        @relation(fields: [personaId], references: [id])
+  assigneeUser     User?           @relation("ActionItemAssignee", fields: [assigneeUserId], references: [id])
+  audits           ActionItemAudit[]
+  events           ActionEvent[]
 
   @@unique([organizationId, articleId, normalizedTitle])
   @@index([organizationId])
   @@index([articleId])
   @@index([topicId])
+  @@index([organizationId, status])
+  @@index([organizationId, priorityLevel])
+  @@index([organizationId, updatedAt])
+  @@index([organizationId, articleId])
+}
+
+model ActionEvent {
+  id             String         @id @default(cuid())
+  organizationId String
+  actionId       String
+  eventType      ActionEventType
+  actorUserId    String?
+  metadata       Json           // small deltas only; { delta?, source }
+  createdAt      DateTime       @default(now())
+
+  action ActionItem @relation(fields: [actionId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, actionId, createdAt])
+  @@index([organizationId, createdAt])
 }
 
 model ActionItemAudit {

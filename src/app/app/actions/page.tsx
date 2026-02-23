@@ -1,15 +1,14 @@
 import Link from "next/link";
-import { ActionItemAudit } from "@/components/action-item-audit";
+import { ActionItemEventList } from "@/components/action-item-event-list";
 import { ActionItemRow } from "@/components/action-item-row";
 import { Banner } from "@/components/ui/Banner";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { auth } from "@clerk/nextjs/server";
-import { redirect } from "next/navigation";
 import { getAuthContext } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { syncDbWithClerk } from "@/lib/sync-clerk";
-import { updateActionItem } from "../server-actions";
+import { updateActionItem } from "./actionItem.actions";
 
 type StatusFilter = "ALL" | "OPEN" | "DONE" | "DISMISSED";
 type AssigneeFilter = "ALL" | "UNASSIGNED" | "ME";
@@ -45,6 +44,7 @@ export default async function ActionsPage({
     status: string;
     dueDate?: string | null;
     priority?: string | null;
+    priorityLevel?: string | null;
     personaId?: string | null;
     assigneeUserId?: string | null;
     article: { id: string; title: string } | null;
@@ -89,6 +89,7 @@ export default async function ActionsPage({
             status: true,
             dueDate: true,
             priority: true,
+            priorityLevel: true,
             personaId: true,
             assigneeUserId: true,
             persona: { select: { id: true, name: true } },
@@ -210,7 +211,7 @@ export default async function ActionsPage({
                   description:
                     parts.length > 1 ? parts.slice(1).join(":").trim() : undefined,
                   dueDate: ai.dueDate,
-                  priority: ai.priority,
+                  priority: ai.priorityLevel ?? ai.priority,
                   status: ai.status,
                   personaId: ai.personaId ?? ai.persona?.id,
                   assigneeUserId: ai.assigneeUserId ?? ai.assigneeUser?.id,
@@ -224,10 +225,7 @@ export default async function ActionsPage({
                     updateActionItem={updateActionItem}
                     articleTitle={ai.article?.title}
                   >
-                    <ActionItemAudit
-                      actionItemId={item.id}
-                      organizationId={org.id}
-                    />
+                    <ActionItemEventList actionId={item.id} />
                   </ActionItemRow>
                 );
               })}

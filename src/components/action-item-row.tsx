@@ -76,6 +76,7 @@ export function ActionItemRow({
                 className="rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
               >
                 <option value="OPEN">OPEN</option>
+                <option value="IN_PROGRESS">IN_PROGRESS</option>
                 <option value="DONE">DONE</option>
                 <option value="DISMISSED">DISMISSED</option>
               </select>
@@ -181,9 +182,11 @@ export function ActionItemRow({
                 className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors duration-150 ${
                   item.status === "OPEN"
                     ? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
-                    : item.status === "DONE"
-                      ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200"
-                      : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                    : item.status === "IN_PROGRESS"
+                      ? "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200"
+                      : item.status === "DONE"
+                        ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200"
+                        : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
                 }`}
               >
                 {item.status}
