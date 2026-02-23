@@ -10,6 +10,7 @@ import {
   dedupeByNormalizedText,
   normalizeActionText,
 } from "@/lib/guardrails/dedupe";
+import { normalizeActionTitle } from "./normalizeActionTitle";
 import { getOpenAIClient } from "@/lib/openai";
 import { checkAndRecordAiUsage } from "@/lib/usage/limits";
 
@@ -143,10 +144,21 @@ export async function executeGenerateActionsForArticle(
   );
   const inMemoryDeduped = dedupeByNormalizedText(actions);
   const notInDb = inMemoryDeduped.filter(
-    (item) => !existingNormalizedTitles.has(normalizeActionText(item.title))
+    (item) =>
+      !existingNormalizedTitles.has(
+        normalizeActionText(normalizeActionTitle(item.title))
+      )
   );
   const remainingSlots = Math.max(0, 10 - existingCount);
-  const toCreate = notInDb.slice(0, remainingSlots);
+  const seenNormalized = new Set(existingNormalizedTitles);
+  const toCreate: (typeof inMemoryDeduped)[0][] = [];
+  for (const item of notInDb) {
+    if (toCreate.length >= remainingSlots) break;
+    const key = normalizeActionText(normalizeActionTitle(item.title));
+    if (seenNormalized.has(key)) continue;
+    seenNormalized.add(key);
+    toCreate.push(item);
+  }
 
   if (toCreate.length === 0) {
     return 0;
@@ -161,7 +173,8 @@ export async function executeGenerateActionsForArticle(
   if (!capOrg.ok) throw new Error(capOrg.message);
 
   const createData = toCreate.map((item) => {
-    const text = [item.title, item.description]
+    const title = normalizeActionTitle(item.title);
+    const text = [title, item.description]
       .filter(Boolean)
       .join(": ");
     return {
@@ -170,7 +183,7 @@ export async function executeGenerateActionsForArticle(
       topicId: article.topicId,
       personaId,
       text,
-      normalizedTitle: normalizeActionText(item.title),
+      normalizedTitle: normalizeActionText(title),
       status: "OPEN" as const,
       ...(item.priority && { priority: item.priority }),
       ...(item.dueDate && { dueDate: item.dueDate }),
