@@ -5,6 +5,8 @@
  * Records each run in BackgroundJobRun for observability.
  */
 import { prisma } from "@/lib/db";
+import { log } from "@/lib/observability/logger";
+import { wrapUnknownError, AppError } from "@/lib/errors";
 import { executeGenerateActionsForArticle } from "@/lib/domain/generateActions";
 import { executeIngestTopic } from "@/lib/domain/ingestTopic";
 import { executeSummarizeArticle } from "@/lib/domain/summarize";
@@ -66,6 +68,7 @@ type RunOptions = {
   organizationId: string;
   limit?: number;
   lockedBy: string;
+  cronRunId?: string;
 };
 
 export type RunResult = {
@@ -82,7 +85,7 @@ export type RunResult = {
 export async function runQueuedJobs(
   options: RunOptions
 ): Promise<RunResult> {
-  const { organizationId, limit = 10, lockedBy } = options;
+  const { organizationId, limit = 10, lockedBy, cronRunId } = options;
   const now = new Date();
 
   const queued = await prisma.backgroundJob.findMany({
@@ -101,6 +104,12 @@ export async function runQueuedJobs(
       maxAttempts: true,
       runAt: true,
     },
+  });
+
+  log.info("jobs.claim", "Jobs claimed for processing", {
+    organizationId,
+    cronRunId,
+    meta: { count: queued.length, limit },
   });
 
   let succeeded = 0;
@@ -126,6 +135,14 @@ export async function runQueuedJobs(
     const attemptNumber = job.attempts + 1;
     const runStart = Date.now();
     const startedAt = new Date();
+
+    log.info("job.start", "Job execution started", {
+      organizationId,
+      jobId: job.id,
+      jobType: job.type,
+      attempt: attemptNumber,
+      cronRunId,
+    });
 
     try {
       switch (job.type) {
@@ -195,12 +212,6 @@ export async function runQueuedJobs(
             body,
           });
 
-          console.log("job.notify", {
-            jobId: job.id,
-            type: job.type,
-            organizationId,
-            actionItemId,
-          });
           break;
         }
         case "RUN_RECIPE":
@@ -237,8 +248,9 @@ export async function runQueuedJobs(
           durationMs,
         },
       });
+      let jobRunId: string | undefined;
       try {
-        await prisma.jobRun.create({
+        const jobRun = await prisma.jobRun.create({
           data: {
             organizationId,
             jobId: job.id,
@@ -252,20 +264,34 @@ export async function runQueuedJobs(
             errorMessage: null,
           },
         });
+        jobRunId = jobRun.id;
       } catch (jobRunErr) {
-        console.warn("jobrun.create failed", {
+        log.warn("jobrun.create_failed", "JobRun create failed after job success", {
+          organizationId,
           jobId: job.id,
-          type: job.type,
-          error: jobRunErr instanceof Error ? jobRunErr.message : String(jobRunErr),
+          jobType: job.type,
+          meta: { error: jobRunErr instanceof Error ? jobRunErr.message : String(jobRunErr) },
         });
       }
+      log.info("job.success", "Job completed successfully", {
+        organizationId,
+        jobId: job.id,
+        jobRunId,
+        jobType: job.type,
+        attempt: attemptNumber,
+        durationMs,
+        cronRunId,
+      });
       pruneOldRuns(organizationId).catch(() => {});
       succeeded++;
-    } catch (err) {
+    } catch (rawErr) {
+      const err = wrapUnknownError(rawErr);
       const lastError = truncateLastErrorForDb(err);
       const runErrorMsg = truncateRunErrorMessage(err);
       const nextAttempts = job.attempts + 1;
       const willRetry = nextAttempts < job.maxAttempts;
+      const retryable = err.retryable;
+      let nextRunAt: Date | undefined;
 
       if (nextAttempts >= job.maxAttempts) {
         await prisma.backgroundJob.update({
@@ -279,15 +305,18 @@ export async function runQueuedJobs(
             updatedAt: now,
           },
         });
-        console.log("job.dead_lettered", {
+        log.info("job.dead", "Job moved to DEAD", {
+          organizationId,
           jobId: job.id,
-          type: job.type,
-          attempts: nextAttempts,
-          maxAttempts: job.maxAttempts,
+          jobType: job.type,
+          attempt: attemptNumber,
+          cronRunId,
+          err: rawErr,
+          meta: { nextAttempts, maxAttempts: job.maxAttempts },
         });
       } else {
         const backoffMs = computeBackoffMs(nextAttempts);
-        const nextRunAt = new Date(Date.now() + backoffMs);
+        nextRunAt = new Date(Date.now() + backoffMs);
         await prisma.backgroundJob.update({
           where: { id: job.id },
           data: {
@@ -299,13 +328,6 @@ export async function runQueuedJobs(
             runAt: nextRunAt,
             updatedAt: now,
           },
-        });
-        console.log("job.requeued", {
-          jobId: job.id,
-          type: job.type,
-          nextAttempts,
-          backoffMs,
-          nextRunAt: nextRunAt.toISOString(),
         });
       }
 
@@ -329,8 +351,9 @@ export async function runQueuedJobs(
           errorMessage: runErrorMsg,
         },
       });
+      let jobRunId: string | undefined;
       try {
-        await prisma.jobRun.create({
+        const jobRun = await prisma.jobRun.create({
           data: {
             organizationId,
             jobId: job.id,
@@ -344,11 +367,26 @@ export async function runQueuedJobs(
             errorMessage: runErrorMsg,
           },
         });
+        jobRunId = jobRun.id;
       } catch (jobRunErr) {
-        console.warn("jobrun.create failed", {
+        log.warn("jobrun.create_failed", "JobRun create failed after job failure", {
+          organizationId,
           jobId: job.id,
-          type: job.type,
-          error: jobRunErr instanceof Error ? jobRunErr.message : String(jobRunErr),
+          jobType: job.type,
+          meta: { error: jobRunErr instanceof Error ? jobRunErr.message : String(jobRunErr) },
+        });
+      }
+      if (willRetry) {
+        log.warn("job.fail", "Job failed, will retry", {
+          organizationId,
+          jobId: job.id,
+          jobRunId,
+          jobType: job.type,
+          attempt: attemptNumber,
+          durationMs,
+          cronRunId,
+          err: rawErr,
+          meta: { retryable, nextRunAt: nextRunAt?.toISOString() },
         });
       }
       pruneOldRuns(organizationId).catch(() => {});

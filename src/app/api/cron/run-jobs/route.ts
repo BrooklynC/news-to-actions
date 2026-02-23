@@ -4,6 +4,8 @@
  * Multi-tenant safe: all work scoped by organizationId.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { log } from "@/lib/observability/logger";
+import { wrapUnknownError } from "@/lib/errors";
 import { prisma } from "@/lib/db";
 import { runJobRunRetention, runQueuedJobs } from "@/lib/jobs/runner";
 import { enqueueDueTopicIngestion } from "@/lib/scheduling/ingestion";
@@ -46,7 +48,10 @@ export async function GET(request: NextRequest) {
   const querySecret = searchParams.get("secret");
   const provided = headerSecret ?? bearerSecret ?? querySecret;
   if (!cronSecret || !provided || provided !== cronSecret) {
-    console.warn("cron.run-jobs unauthorized", { requestId });
+    log.warn("cron.auth_denied", "Cron request unauthorized", {
+      requestId,
+      meta: { durationMs: Date.now() - startTime },
+    });
     return NextResponse.json(
       { ok: false, requestId, durationMs: Date.now() - startTime },
       { status: 401 }
@@ -96,7 +101,11 @@ export async function GET(request: NextRequest) {
 
   if (!acquired) {
     const durationMs = Date.now() - startTime;
-    console.log("cron.run-jobs skipped.overlap", { requestId, lockKey });
+    log.info("cron.skipped_overlap", "Cron skipped due to overlap", {
+      requestId,
+      durationMs,
+      meta: { lockKey },
+    });
     return NextResponse.json(
       { ok: true, skipped: true, reason: "overlap", requestId, durationMs },
       { status: 200 }
@@ -104,16 +113,14 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-  console.log("cron.run-jobs start", {
-    requestId,
-    mode,
-    ...(orgId ? { orgId } : {}),
-    limit,
-    perOrg,
-  });
-
   const cronRun = await prisma.cronRun.create({
     data: { requestId, status: "RUNNING" },
+  });
+
+  log.info("cron.start", "Cron run started", {
+    requestId,
+    cronRunId: cronRun.id,
+    meta: { mode, ...(orgId ? { orgId } : {}), limit, perOrg },
   });
 
   try {
@@ -139,11 +146,11 @@ export async function GET(request: NextRequest) {
           where: { id: cronRun.id },
           data: { finishedAt: new Date(), status: "FAILED", error: "Organization not found" },
         });
-        console.log("cron.run-jobs finish", {
+        log.warn("cron.done", "Cron run finished with error", {
           requestId,
-          status: "error",
-          mode,
+          cronRunId: cronRun.id,
           durationMs,
+          meta: { status: "error", mode, error: "Organization not found" },
         });
         return NextResponse.json(
           { ok: false, error: "Organization not found", requestId, durationMs },
@@ -155,6 +162,7 @@ export async function GET(request: NextRequest) {
         organizationId: orgId,
         limit,
         lockedBy,
+        cronRunId: cronRun.id,
       });
 
       await runJobRunRetention([orgId]);
@@ -164,11 +172,19 @@ export async function GET(request: NextRequest) {
       where: { id: cronRun.id },
       data: { finishedAt: new Date(), status: "SUCCEEDED", error: null },
     });
-    console.log("cron.run-jobs finish", {
+    log.info("cron.done", "Cron run finished", {
       requestId,
-      status: "ok",
-      mode,
+      cronRunId: cronRun.id,
       durationMs,
+      meta: {
+        mode: "single-org",
+        orgId,
+        jobsProcessed: result.processed,
+        jobsSkipped: 0,
+        jobsFailed: result.failed,
+        succeeded: result.succeeded,
+        requeued: result.requeued,
+      },
     });
 
     return NextResponse.json({
@@ -215,6 +231,7 @@ export async function GET(request: NextRequest) {
         organizationId: oid,
         limit: perOrg,
         lockedBy,
+        cronRunId: cronRun.id,
       });
 
       processedOrgs++;
@@ -233,11 +250,19 @@ export async function GET(request: NextRequest) {
       where: { id: cronRun.id },
       data: { finishedAt: new Date(), status: "SUCCEEDED", error: null },
     });
-    console.log("cron.run-jobs finish", {
+    log.info("cron.done", "Cron run finished", {
       requestId,
-      status: "ok",
-      mode,
+      cronRunId: cronRun.id,
       durationMs,
+      meta: {
+        mode: "multi-org",
+        processedOrgs,
+        jobsProcessed: totalClaimed,
+        jobsSkipped: 0,
+        jobsFailed: totalFailed,
+        succeeded: totalSucceeded,
+        requeued: totalRequeued,
+      },
     });
 
     return NextResponse.json({
@@ -255,7 +280,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (e) {
-    const err = e instanceof Error ? e : new Error(String(e));
+    const err = wrapUnknownError(e);
     const errMsg = err.message.length > 500 ? err.message.slice(0, 500) + "…" : err.message;
     try {
       await prisma.cronRun.update({
@@ -265,14 +290,13 @@ export async function GET(request: NextRequest) {
     } catch {
       // best-effort; continue
     }
-    console.error("cron.run-jobs error", {
-      requestId,
-      status: "FAILED",
-      durationMs: Date.now() - startTime,
-      message: err.message,
-      stack: err.stack,
-    });
     const durationMs = Date.now() - startTime;
+    log.error("cron.failed", "Cron run failed", {
+      requestId,
+      cronRunId: cronRun.id,
+      durationMs,
+      err: e,
+    });
     return NextResponse.json(
       { ok: false, requestId, durationMs },
       { status: 500 }
@@ -285,10 +309,12 @@ export async function GET(request: NextRequest) {
           where: { key: lockKey, owner },
         });
       } catch (unlockErr) {
-        console.warn("cron.run-jobs lock release failed", {
+        log.warn("cron.lock_release_failed", "Cron lock release failed", {
           requestId,
-          lockKey,
-          error: unlockErr instanceof Error ? unlockErr.message : String(unlockErr),
+          meta: {
+            lockKey,
+            error: unlockErr instanceof Error ? unlockErr.message : String(unlockErr),
+          },
         });
       }
     }
