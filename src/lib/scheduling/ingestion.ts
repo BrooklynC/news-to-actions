@@ -86,7 +86,7 @@ export async function enqueueDueTopicIngestion(
 
   const where = {
     isIngestionEnabled: true,
-    cadence: { in: [TopicCadence.HOURLY, TopicCadence.DAILY] },
+    cadence: { in: [TopicCadence.HOURLY, TopicCadence.DAILY] }, // Excludes MANUAL at DB level
     OR: [{ nextRunAt: null }, { nextRunAt: { lte: now } }],
     ...(params.organizationId ? { organizationId: params.organizationId } : {}),
   };

@@ -266,6 +266,11 @@ export async function updateTopicRecipe(formData: FormData) {
   });
 }
 
+function buildMinuteKey(d: Date): string {
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}${pad(d.getHours())}${pad(d.getMinutes())}`;
+}
+
 export async function runTopicNow(formData: FormData) {
   return safeAction(async () => {
     const org = await getOrgAndRedirect();
@@ -280,7 +285,8 @@ export async function runTopicNow(formData: FormData) {
     if (!topic)
       redirect(`${ARTICLES}?error=` + encodeURIComponent("Topic not found."));
 
-    const idempotencyKey = `INGEST_TOPIC:${topicId}:manual:${Date.now()}`;
+    const now = new Date();
+    const idempotencyKey = `topic-run-now:${org.id}:${topicId}:${buildMinuteKey(now)}`;
     await enqueueJob({
       organizationId: org.id,
       type: "INGEST_TOPIC",
@@ -288,13 +294,11 @@ export async function runTopicNow(formData: FormData) {
       idempotencyKey,
     });
 
-    if (topic.cadence !== "MANUAL") {
-      const nextRunAt = await computeNextRunAtForCadence(topic.cadence);
-      await prisma.topic.update({
-        where: { id: topic.id },
-        data: { nextRunAt, updatedAt: new Date() },
-      });
-    }
+    const nextRunAt = await computeNextRunAtForCadence(topic.cadence);
+    await prisma.topic.update({
+      where: { id: topic.id },
+      data: { nextRunAt, updatedAt: now },
+    });
 
     redirect(`${ARTICLES}?message=` + encodeURIComponent("Ingest queued."));
   });

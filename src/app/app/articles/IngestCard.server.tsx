@@ -147,11 +147,13 @@ export function IngestCardServer({ topics, personasCount }: Props) {
                     <span title={t.lastIngestAt?.toISOString()}>
                       Last · {t.lastIngestAt ? formatRelativeTime(t.lastIngestAt) : "Never"}
                     </span>
-                    <span title={t.nextRunAt?.toISOString()}>
+                    <span title={t.nextRunAt?.toISOString() ?? undefined}>
                       Next ·{" "}
                       {t.cadence === "MANUAL"
                         ? "Manual"
-                        : formatRelativeFutureTime(t.nextRunAt)}
+                        : t.nextRunAt
+                          ? formatRelativeFutureTime(t.nextRunAt)
+                          : "Soon"}
                     </span>
                   </div>
                 </div>
