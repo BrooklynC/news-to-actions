@@ -300,7 +300,17 @@ export async function runTopicNow(formData: FormData) {
       data: { nextRunAt, updatedAt: now },
     });
 
-    redirect(`${ARTICLES}?message=` + encodeURIComponent("Ingest queued."));
+    const result = await runQueuedJobs({
+      organizationId: org.id,
+      limit: 5,
+      lockedBy: "ui",
+    });
+
+    const message =
+      result.succeeded > 0
+        ? "Ingest complete."
+        : "Ingest queued (will run shortly).";
+    redirect(`${ARTICLES}?message=` + encodeURIComponent(message));
   });
 }
 
