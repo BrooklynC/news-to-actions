@@ -7,10 +7,6 @@ import { prisma } from "@/lib/db";
 import { enforceCaps } from "@/lib/guardrails/caps";
 import { normalizeActionText } from "@/lib/guardrails/dedupe";
 import { fetchGoogleNewsRss } from "@/lib/rss";
-import { generateActions, summarizeArticle } from "./actions";
-
-export { generateActions, summarizeArticle };
-
 const ARTICLES = "/app/articles";
 const ACTIONS = "/app/actions";
 

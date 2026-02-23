@@ -7,13 +7,12 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { ArticleSummarizeButton } from "./ArticleSummarizeButton";
 import { ArticleGenerateButton } from "./ArticleGenerateButton";
 import {
-  generateActions,
   runJobsNow,
   runSchedulerNowDev,
   seedDevTopic,
   enqueueIngestForDevTopic,
-  summarizeArticle,
 } from "@/app/app/actions";
+import { generateActions, summarizeArticle } from "./actions";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { getAuthContext } from "@/lib/auth";
