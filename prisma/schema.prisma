@@ -40,6 +40,12 @@ enum RunStatus {
   FAILED
 }
 
+enum CronRunStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
 enum IngestionCadence {
   HOURLY
   DAILY
@@ -275,4 +281,17 @@ model BackgroundJobRun {
   @@index([organizationId, startedAt])
   @@index([organizationId, status, startedAt])
   @@index([backgroundJobId, startedAt])
+}
+
+model CronRun {
+  id          String        @id @default(cuid())
+  startedAt   DateTime      @default(now())
+  finishedAt  DateTime?
+  status      CronRunStatus @default(RUNNING)
+  error       String?
+  requestId   String?       @unique
+  createdAt   DateTime      @default(now())
+
+  @@index([startedAt])
+  @@index([status, startedAt])
 }
