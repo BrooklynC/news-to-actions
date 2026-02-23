@@ -1,5 +1,5 @@
 /**
- * Normalize action item titles for scan-first display quality.
+ * Safety-only title normalization. Non-destructive; preserves original wording.
  * Unknown-safe; never throws.
  */
 export function normalizeActionTitle(input: unknown): string {
@@ -7,50 +7,19 @@ export function normalizeActionTitle(input: unknown): string {
   let t = raw.trim().replace(/\s+/g, " ");
   if (!t) return "Action item";
 
-  // strip quotes
+  // optional: remove wrapping quotes
   t = t.replace(/^["']+|["']+$/g, "").trim();
-
-  // strip bullets/numbering
-  t = t.replace(/^(?:[-•]\s+|\d+\s*[\).\:-]\s+)+/i, "").trim();
-
-  // strip conservative weak prefixes (case-insensitive)
-  const prefixes = [
-    "consider ",
-    "evaluate ",
-    "review ",
-    "look into ",
-    "explore ",
-    "assess ",
-    "investigate ",
-    "determine whether ",
-    "decide whether ",
-    "plan to ",
-    "think about ",
-    "action: ",
-    "task: ",
-    "next step: ",
-  ];
-  const lower = t.toLowerCase();
-  for (const p of prefixes) {
-    if (lower.startsWith(p)) {
-      t = t.slice(p.length).trim();
-      break;
-    }
-  }
   if (!t) return "Action item";
 
-  // sentence-case minimal: uppercase first letter
-  t = t.charAt(0).toUpperCase() + t.slice(1);
+  // optional: strip leading bullets/numbering
+  t = t.replace(/^(?:[-•]\s+|\d+\s*[\).\:-]\s+)+/i, "").trim();
+  if (!t) return "Action item";
 
-  // remove trailing period
-  t = t.replace(/\.\s*$/, "");
-
-  // length cap
-  const hardCap = 90;
+  const hardCap = 120;
   if (t.length > hardCap) {
     const cut = t.slice(0, hardCap);
     const lastSpace = cut.lastIndexOf(" ");
-    t = (lastSpace > 40 ? cut.slice(0, lastSpace) : cut).trim() + "…";
+    t = (lastSpace > 60 ? cut.slice(0, lastSpace) : cut).trim() + "…";
   }
 
   return t || "Action item";
