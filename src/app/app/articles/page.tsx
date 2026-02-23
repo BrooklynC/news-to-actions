@@ -19,6 +19,11 @@ import { redirect } from "next/navigation";
 import { getAuthContext } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { syncDbWithClerk } from "@/lib/sync-clerk";
+import {
+  getTopicHealthEnrichment,
+  enrichTopicsWithHealth,
+} from "@/lib/topics/health";
+import type { TopicHealth } from "@/lib/types/topicHealth";
 import { IngestCardServer } from "./IngestCard.server";
 
 export default async function ArticlesPage({
@@ -43,6 +48,9 @@ export default async function ArticlesPage({
     cadence: string;
     nextRunAt: Date | null;
     recipeType: string;
+    health: TopicHealth;
+    lastIngestSuccessAt: Date | null;
+    lastIngestFailureAt: Date | null;
     articles: {
       id: string;
       title: string;
@@ -63,7 +71,7 @@ export default async function ArticlesPage({
       select: { id: true },
     });
     if (org) {
-      const [topicsData, personasData] = await Promise.all([
+      const [topicsData, personasData, healthEnrichment] = await Promise.all([
         prisma.topic.findMany({
           where: { organizationId: org.id },
           orderBy: { updatedAt: "desc" },
@@ -93,8 +101,9 @@ export default async function ArticlesPage({
           orderBy: { name: "asc" },
           select: { id: true, name: true },
         }),
+        getTopicHealthEnrichment(org.id),
       ]);
-      topics = topicsData;
+      topics = enrichTopicsWithHealth(topicsData, healthEnrichment);
       personas = personasData;
     }
   }
@@ -137,6 +146,9 @@ export default async function ArticlesPage({
               cadence: t.cadence,
               nextRunAt: t.nextRunAt ?? null,
               recipeType: t.recipeType,
+              health: t.health,
+              lastIngestSuccessAt: t.lastIngestSuccessAt ?? null,
+              lastIngestFailureAt: t.lastIngestFailureAt ?? null,
             }))}
             personasCount={personas.length}
           />

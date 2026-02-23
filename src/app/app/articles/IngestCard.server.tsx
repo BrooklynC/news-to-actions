@@ -4,6 +4,10 @@ import {
   formatRelativeFutureTime,
 } from "@/lib/time";
 import {
+  getTopicHealthLabel,
+  type TopicHealth,
+} from "@/lib/types/topicHealth";
+import {
   createTopicFromForm,
   runMyOrgJobs,
   updateTopicCadence,
@@ -31,7 +35,23 @@ type Topic = {
   cadence: string;
   nextRunAt: Date | null;
   recipeType: string;
+  health: TopicHealth;
+  lastIngestSuccessAt: Date | null;
+  lastIngestFailureAt: Date | null;
 };
+
+function healthDotColor(health: TopicHealth): string {
+  switch (health) {
+    case "HEALTHY":
+      return "bg-green-500";
+    case "STALE":
+      return "bg-amber-500";
+    case "FAILED":
+      return "bg-red-500";
+    case "MANUAL":
+      return "bg-zinc-400 dark:bg-zinc-500";
+  }
+}
 
 type Props = {
   topics: Topic[];
@@ -86,6 +106,28 @@ export function IngestCardServer({ topics, personasCount }: Props) {
                   </h4>
                   <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
                     <span
+                      className={`inline-flex items-center gap-1 ${
+                        t.health === "HEALTHY"
+                          ? "text-green-600 dark:text-green-400"
+                          : t.health === "STALE"
+                            ? "text-amber-600 dark:text-amber-400"
+                            : t.health === "FAILED"
+                              ? "text-red-600 dark:text-red-400"
+                              : "text-zinc-500 dark:text-zinc-400"
+                      }`}
+                      title={
+                        t.lastIngestFailureAt
+                          ? `Last failure · ${formatRelativeTime(t.lastIngestFailureAt)}`
+                          : undefined
+                      }
+                    >
+                      <span
+                        className={`h-1.5 w-1.5 shrink-0 rounded-full ${healthDotColor(t.health)}`}
+                        aria-hidden
+                      />
+                      Status · {getTopicHealthLabel(t.health)}
+                    </span>
+                    <span
                       className={`inline-flex rounded-full px-2 py-0.5 font-medium ${
                         t.cadence === "MANUAL"
                           ? "bg-zinc-100 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300"
@@ -108,7 +150,7 @@ export function IngestCardServer({ topics, personasCount }: Props) {
                     <span title={t.nextRunAt?.toISOString()}>
                       Next ·{" "}
                       {t.cadence === "MANUAL"
-                        ? "Manual only"
+                        ? "Manual"
                         : formatRelativeFutureTime(t.nextRunAt)}
                     </span>
                   </div>
