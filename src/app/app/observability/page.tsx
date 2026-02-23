@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { formatRelativeTime } from "@/lib/time";
-import { getObservabilitySnapshot } from "./actions";
+import { getObservabilitySnapshot, listDeadJobs, requeueDeadJob } from "./actions";
 import { runMyOrgJobs } from "../actions";
 
 function formatDuration(ms: number | null): string {
@@ -11,8 +11,17 @@ function formatDuration(ms: number | null): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
+function truncateError(s: string | null, maxLen: number = 80): string {
+  if (s == null || s === "") return "—";
+  if (s.length <= maxLen) return s;
+  return s.slice(0, maxLen) + "…";
+}
+
 export default async function ObservabilityPage() {
-  const snapshot = await getObservabilitySnapshot();
+  const [snapshot, deadJobs] = await Promise.all([
+    getObservabilitySnapshot(),
+    listDeadJobs(),
+  ]);
   const {
     failureCount24h,
     cronFailedCount24h,
@@ -166,6 +175,87 @@ export default async function ObservabilityPage() {
                         )}
                         {!r.topicId && !r.articleId && "—"}
                       </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {/* Dead letters */}
+      <Card className="overflow-hidden">
+        <h3 className="border-b border-zinc-200 px-4 py-3 text-sm font-medium text-zinc-900 dark:border-zinc-700 dark:text-zinc-100">
+          Dead letters
+          {deadJobs.length > 0 && (
+            <span className="ml-2 rounded-full bg-zinc-200 px-2 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-600 dark:text-zinc-200">
+              {deadJobs.length}
+            </span>
+          )}
+        </h3>
+        {deadJobs.length === 0 ? (
+          <div className="p-6 text-center">
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              No dead-letter jobs.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[480px] text-sm">
+              <thead>
+                <tr className="border-b border-zinc-200 bg-zinc-50/80 dark:border-zinc-700 dark:bg-zinc-800/50">
+                  <th className="px-4 py-2.5 text-left font-medium text-zinc-700 dark:text-zinc-300">
+                    Type
+                  </th>
+                  <th className="px-4 py-2.5 text-left font-medium text-zinc-700 dark:text-zinc-300">
+                    Attempts
+                  </th>
+                  <th className="px-4 py-2.5 text-left font-medium text-zinc-700 dark:text-zinc-300">
+                    Last error
+                  </th>
+                  <th className="px-4 py-2.5 text-left font-medium text-zinc-700 dark:text-zinc-300">
+                    Updated
+                  </th>
+                  <th className="px-4 py-2.5 text-left font-medium text-zinc-700 dark:text-zinc-300">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {deadJobs.map((j) => (
+                  <tr
+                    key={j.id}
+                    className="border-b border-zinc-100 last:border-0 dark:border-zinc-800"
+                  >
+                    <td className="max-w-[140px] truncate px-4 py-2.5 font-medium text-zinc-900 dark:text-zinc-100">
+                      {j.type.replace(/_/g, " ")}
+                    </td>
+                    <td className="px-4 py-2.5 text-zinc-600 dark:text-zinc-400">
+                      {j.attempts} / {j.maxAttempts}
+                    </td>
+                    <td
+                      className="max-w-[200px] truncate px-4 py-2.5 text-zinc-600 dark:text-zinc-400"
+                      title={j.lastError ?? undefined}
+                    >
+                      {truncateError(j.lastError)}
+                    </td>
+                    <td
+                      className="max-w-[80px] truncate px-4 py-2.5 text-zinc-600 dark:text-zinc-400"
+                      title={j.updatedAt.toISOString()}
+                    >
+                      {formatRelativeTime(j.updatedAt)}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <form action={requeueDeadJob} className="inline">
+                        <input type="hidden" name="jobId" value={j.id} />
+                        <button
+                          type="submit"
+                          className="rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                        >
+                          Retry now
+                        </button>
+                      </form>
                     </td>
                   </tr>
                 ))}

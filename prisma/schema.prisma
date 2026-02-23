@@ -55,6 +55,7 @@ enum JobStatus {
   SUCCEEDED
   FAILED
   CANCELED
+  DEAD
 }
 
 enum RunStatus {

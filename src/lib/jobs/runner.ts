@@ -180,21 +180,44 @@ export async function runQueuedJobs(
     } catch (err) {
       const lastError = truncateError(err);
       const runErrorMsg = truncateRunErrorMessage(err);
-      const newAttempts = job.attempts + 1;
-      const willRetry = newAttempts < job.maxAttempts;
+      const nextAttempts = job.attempts + 1;
+      const willRetry = nextAttempts < job.maxAttempts;
 
-      await prisma.backgroundJob.update({
-        where: { id: job.id },
-        data: {
-          status: willRetry ? "QUEUED" : "FAILED",
-          attempts: newAttempts,
-          lastError,
-          lockedAt: null,
-          lockedBy: null,
-          runAt: willRetry ? backoffRunAt(newAttempts) : undefined,
-          updatedAt: now,
-        },
-      });
+      if (nextAttempts >= job.maxAttempts) {
+        await prisma.backgroundJob.update({
+          where: { id: job.id },
+          data: {
+            status: "DEAD",
+            attempts: nextAttempts,
+            lastError,
+            lockedAt: null,
+            lockedBy: null,
+            runAt: now,
+            updatedAt: now,
+          },
+        });
+        console.log("job.dead_lettered", {
+          jobId: job.id,
+          organizationId,
+          type: job.type,
+          attempts: nextAttempts,
+          maxAttempts: job.maxAttempts,
+        });
+      } else {
+        await prisma.backgroundJob.update({
+          where: { id: job.id },
+          data: {
+            status: "QUEUED",
+            attempts: nextAttempts,
+            lastError,
+            lockedAt: null,
+            lockedBy: null,
+            runAt: backoffRunAt(nextAttempts),
+            updatedAt: now,
+          },
+        });
+      }
+
       const durationMs = Math.round(Date.now() - runStart);
       await prisma.backgroundJobRun.create({
         data: {

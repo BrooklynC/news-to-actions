@@ -35,6 +35,101 @@ async function getOrgId(): Promise<string | null> {
   return org?.id ?? null;
 }
 
+const OBSERVABILITY = "/app/observability";
+
+export type DeadJob = {
+  id: string;
+  type: string;
+  status: string;
+  attempts: number;
+  maxAttempts: number;
+  runAt: Date;
+  lastError: string | null;
+  updatedAt: Date;
+};
+
+export async function listDeadJobs(): Promise<DeadJob[]> {
+  const orgId = await getOrgId();
+  if (!orgId) return [];
+
+  const jobs = await prisma.backgroundJob.findMany({
+    where: { organizationId: orgId, status: "DEAD" },
+    orderBy: { updatedAt: "desc" },
+    take: 50,
+    select: {
+      id: true,
+      type: true,
+      status: true,
+      attempts: true,
+      maxAttempts: true,
+      runAt: true,
+      lastError: true,
+      updatedAt: true,
+    },
+  });
+
+  return jobs.map((j) => ({
+    id: j.id,
+    type: j.type,
+    status: j.status,
+    attempts: j.attempts,
+    maxAttempts: j.maxAttempts,
+    runAt: j.runAt,
+    lastError: j.lastError,
+    updatedAt: j.updatedAt,
+  }));
+}
+
+export async function requeueDeadJob(formData: FormData) {
+  const { requireOrgAndUser } = await import("@/lib/auth");
+  const { redirect } = await import("next/navigation");
+
+  const authResult = await requireOrgAndUser().catch(() => null);
+  if (!authResult) {
+    redirect(`${OBSERVABILITY}?error=` + encodeURIComponent("No organization selected."));
+    return;
+  }
+  const { organizationId, userId } = authResult;
+
+  const rawJobId = (formData.get("jobId") as string)?.trim() ?? "";
+  if (!rawJobId) {
+    redirect(`${OBSERVABILITY}?error=` + encodeURIComponent("jobId is required."));
+    return;
+  }
+
+  const job = await prisma.backgroundJob.findFirst({
+    where: { id: rawJobId, organizationId, status: "DEAD" },
+    select: { id: true, type: true },
+  });
+  if (!job) {
+    redirect(`${OBSERVABILITY}?error=` + encodeURIComponent("Dead job not found."));
+    return;
+  }
+
+  const now = new Date();
+  await prisma.backgroundJob.update({
+    where: { id: job.id },
+    data: {
+      status: "QUEUED",
+      attempts: 0,
+      runAt: now,
+      lockedAt: null,
+      lockedBy: null,
+      lastError: null,
+      updatedAt: now,
+    },
+  });
+
+  console.log("job.requeued", {
+    actorUserId: userId,
+    jobId: job.id,
+    organizationId,
+    type: job.type,
+  });
+
+  redirect(`${OBSERVABILITY}?message=` + encodeURIComponent("Job requeued."));
+}
+
 export type RecentJobRun = {
   id: string;
   jobType: string;
