@@ -33,6 +33,21 @@ function toJsonValue(value: unknown): Prisma.InputJsonValue {
   return String(value);
 }
 
+type ActionStatus = "OPEN" | "IN_PROGRESS" | "DONE" | "DISMISSED";
+
+function isValidStatusTransition(from: ActionStatus, to: ActionStatus): boolean {
+  if (from === to) return true;
+
+  const allowed: Record<ActionStatus, ActionStatus[]> = {
+    OPEN: ["IN_PROGRESS", "DONE", "DISMISSED"],
+    IN_PROGRESS: ["DONE", "DISMISSED", "OPEN"],
+    DONE: ["OPEN"],
+    DISMISSED: ["OPEN"],
+  };
+
+  return (allowed[from] ?? []).includes(to);
+}
+
 const ActionPrioritySchema = z.enum(["LOW", "MEDIUM", "HIGH"]);
 const ActionStatusSchema = z.enum(["OPEN", "IN_PROGRESS", "DONE", "DISMISSED"]);
 
@@ -80,6 +95,17 @@ export async function updateActionItem(formData: FormData) {
     },
   });
   if (!existing) redirect(`${ACTIONS}?error=` + encodeURIComponent("Action item not found."));
+
+  if (
+    status != null &&
+    existing.status !== status &&
+    !isValidStatusTransition(existing.status as ActionStatus, status as ActionStatus)
+  ) {
+    redirect(
+      `${ACTIONS}?error=` +
+        encodeURIComponent(`Invalid status transition: ${existing.status} → ${status}`)
+    );
+  }
 
   const newText = title != null
     ? [title, description ?? ""].filter(Boolean).join(": ")
