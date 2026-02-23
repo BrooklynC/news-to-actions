@@ -54,6 +54,8 @@ function healthDotColor(health: TopicHealth): string {
       return "bg-red-500";
     case "MANUAL":
       return "bg-zinc-400 dark:bg-zinc-500";
+    case "NEW":
+      return "bg-blue-400 dark:bg-blue-500";
   }
 }
 
@@ -126,7 +128,9 @@ export function IngestCardServer({ topics, personasCount }: Props) {
                             ? "text-amber-600 dark:text-amber-400"
                             : t.health === "FAILED"
                               ? "text-red-600 dark:text-red-400"
-                              : "text-zinc-500 dark:text-zinc-400"
+                              : t.health === "NEW"
+                                ? "text-blue-600 dark:text-blue-400"
+                                : "text-zinc-500 dark:text-zinc-400"
                       }`}
                       title={
                         t.lastIngestFailureAt

@@ -163,17 +163,16 @@ function computeHealth(
   now: Date
 ): TopicHealth {
   if (cadence === "MANUAL") return "MANUAL";
+  if (lastSuccessAt == null) return "NEW";
 
   const isFailed =
-    lastFailureAt != null &&
-    (lastSuccessAt == null || lastFailureAt > lastSuccessAt);
+    lastFailureAt != null && lastFailureAt > lastSuccessAt;
   if (isFailed) return "FAILED";
 
   const staleThresholdMs =
     cadence === "HOURLY" ? STALE_HOURLY_MS : STALE_DAILY_MS;
   const staleThreshold = new Date(now.getTime() - staleThresholdMs);
-  const isStale = lastSuccessAt == null || lastSuccessAt < staleThreshold;
-  if (isStale) return "STALE";
+  if (lastSuccessAt < staleThreshold) return "STALE";
 
   return "HEALTHY";
 }
