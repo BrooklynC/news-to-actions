@@ -424,6 +424,82 @@ export async function getObservabilitySnapshot(): Promise<ObservabilitySnapshot>
   };
 }
 
+export type JobMetricsWindow = {
+  avgDurationMs: number | null;
+  p95DurationMs: number | null;
+  successRate: number | null;
+  avgQueueWaitMs: number | null;
+  totalRuns: number;
+};
+
+export type JobMetrics = {
+  last24h: JobMetricsWindow;
+  last7d: JobMetricsWindow;
+};
+
+function computeWindowMetrics(
+  runs: { durationMs: number; queueWaitMs: number; status: string }[]
+): JobMetricsWindow {
+  const totalRuns = runs.length;
+  if (totalRuns === 0) {
+    return {
+      avgDurationMs: null,
+      p95DurationMs: null,
+      successRate: null,
+      avgQueueWaitMs: null,
+      totalRuns: 0,
+    };
+  }
+  const succeeded = runs.filter((r) => r.status === "SUCCEEDED").length;
+  const sumDuration = runs.reduce((a, r) => a + r.durationMs, 0);
+  const sumQueueWait = runs.reduce((a, r) => a + r.queueWaitMs, 0);
+  const sortedDuration = [...runs].map((r) => r.durationMs).sort((a, b) => a - b);
+  const p95Idx = Math.floor((totalRuns - 1) * 0.95);
+  return {
+    avgDurationMs: Math.round(sumDuration / totalRuns),
+    p95DurationMs: sortedDuration[p95Idx] ?? null,
+    successRate: totalRuns > 0 ? succeeded / totalRuns : null,
+    avgQueueWaitMs: Math.round(sumQueueWait / totalRuns),
+    totalRuns,
+  };
+}
+
+export async function getJobMetrics(): Promise<JobMetrics | null> {
+  const orgId = await getOrgId();
+  if (!orgId) return null;
+
+  const now = new Date();
+  const since24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const since7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const cap = 2000;
+
+  const [runs24h, runs7d] = await Promise.all([
+    prisma.jobRun.findMany({
+      where: {
+        organizationId: orgId,
+        startedAt: { gte: since24h },
+      },
+      orderBy: { startedAt: "desc" },
+      take: cap,
+      select: { durationMs: true, queueWaitMs: true, status: true },
+    }),
+    prisma.jobRun.findMany({
+      where: {
+        organizationId: orgId,
+        startedAt: { gte: since7d },
+      },
+      orderBy: { startedAt: "desc" },
+      take: cap,
+      select: { durationMs: true, queueWaitMs: true, status: true },
+    }),
+  ]);
+
+  return {
+    last24h: computeWindowMetrics(runs24h),
+    last7d: computeWindowMetrics(runs7d),
+  };
+}
+
 export async function getTopicObservability(): Promise<TopicObservability[]> {
   const orgId = await getOrgId();
   if (!orgId) return [];

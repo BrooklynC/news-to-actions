@@ -13,22 +13,27 @@ import { parseJobPayload } from "./schemas";
 import { NotifyPayloadSchema } from "./schemas";
 import type { JobType } from "@prisma/client";
 
-const MAX_ERROR_LENGTH = 5000;
 const RUN_ERROR_MESSAGE_MAX = 1500;
+const LAST_ERROR_MAX = 2000;
 const RUNS_RETENTION_PER_ORG = 2000;
 
-const BACKOFF_MINUTES = [1, 5, 15, 60];
+const BACKOFF_BASE_MS = 30_000;
+const BACKOFF_CAP_MS = 15 * 60 * 1000;
 
-function backoffRunAt(attempts: number): Date {
-  const idx = Math.min(attempts, BACKOFF_MINUTES.length - 1);
-  const mins = BACKOFF_MINUTES[idx];
-  return new Date(Date.now() + mins * 60 * 1000);
+/**
+ * Exponential backoff: base 30s, cap 15m, jitter ±20%.
+ * delay = base * 2^(nextAttempts - 1), then * random in [0.8, 1.2].
+ */
+function computeBackoffMs(nextAttempts: number): number {
+  const expMs = BACKOFF_BASE_MS * Math.pow(2, nextAttempts - 1);
+  const jitterFactor = 0.8 + Math.random() * 0.4;
+  return Math.min(BACKOFF_CAP_MS, Math.round(expMs * jitterFactor));
 }
 
-function truncateError(err: unknown): string {
+function truncateLastErrorForDb(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
-  return msg.length > MAX_ERROR_LENGTH
-    ? msg.slice(0, MAX_ERROR_LENGTH) + "..."
+  return msg.length > LAST_ERROR_MAX
+    ? msg.slice(0, LAST_ERROR_MAX) + "..."
     : msg;
 }
 
@@ -94,6 +99,7 @@ export async function runQueuedJobs(
       payloadJson: true,
       attempts: true,
       maxAttempts: true,
+      runAt: true,
     },
   });
 
@@ -119,6 +125,7 @@ export async function runQueuedJobs(
 
     const attemptNumber = job.attempts + 1;
     const runStart = Date.now();
+    const startedAt = new Date();
 
     try {
       switch (job.type) {
@@ -212,7 +219,12 @@ export async function runQueuedJobs(
           updatedAt: now,
         },
       });
-      const durationMs = Math.round(Date.now() - runStart);
+      const finishedAt = new Date();
+      const durationMs = Math.round(finishedAt.getTime() - startedAt.getTime());
+      const queueWaitMs = Math.max(
+        0,
+        Math.round(startedAt.getTime() - job.runAt.getTime())
+      );
       await prisma.backgroundJobRun.create({
         data: {
           organizationId,
@@ -220,15 +232,37 @@ export async function runQueuedJobs(
           jobType: job.type as JobType,
           status: "SUCCEEDED",
           attemptNumber,
-          startedAt: now,
-          finishedAt: new Date(),
+          startedAt,
+          finishedAt,
           durationMs,
         },
       });
+      try {
+        await prisma.jobRun.create({
+          data: {
+            organizationId,
+            jobId: job.id,
+            type: job.type,
+            attempt: attemptNumber,
+            status: "SUCCEEDED",
+            startedAt,
+            finishedAt,
+            durationMs,
+            queueWaitMs,
+            errorMessage: null,
+          },
+        });
+      } catch (jobRunErr) {
+        console.warn("jobrun.create failed", {
+          jobId: job.id,
+          type: job.type,
+          error: jobRunErr instanceof Error ? jobRunErr.message : String(jobRunErr),
+        });
+      }
       pruneOldRuns(organizationId).catch(() => {});
       succeeded++;
     } catch (err) {
-      const lastError = truncateError(err);
+      const lastError = truncateLastErrorForDb(err);
       const runErrorMsg = truncateRunErrorMessage(err);
       const nextAttempts = job.attempts + 1;
       const willRetry = nextAttempts < job.maxAttempts;
@@ -242,18 +276,18 @@ export async function runQueuedJobs(
             lastError,
             lockedAt: null,
             lockedBy: null,
-            runAt: now,
             updatedAt: now,
           },
         });
         console.log("job.dead_lettered", {
           jobId: job.id,
-          organizationId,
           type: job.type,
           attempts: nextAttempts,
           maxAttempts: job.maxAttempts,
         });
       } else {
+        const backoffMs = computeBackoffMs(nextAttempts);
+        const nextRunAt = new Date(Date.now() + backoffMs);
         await prisma.backgroundJob.update({
           where: { id: job.id },
           data: {
@@ -262,13 +296,26 @@ export async function runQueuedJobs(
             lastError,
             lockedAt: null,
             lockedBy: null,
-            runAt: backoffRunAt(nextAttempts),
+            runAt: nextRunAt,
             updatedAt: now,
           },
         });
+        console.log("job.requeued", {
+          jobId: job.id,
+          type: job.type,
+          nextAttempts,
+          backoffMs,
+          nextRunAt: nextRunAt.toISOString(),
+        });
       }
 
-      const durationMs = Math.round(Date.now() - runStart);
+      const finishedAt = new Date();
+      const durationMs = Math.round(finishedAt.getTime() - startedAt.getTime());
+      const queueWaitMs = Math.max(
+        0,
+        Math.round(startedAt.getTime() - job.runAt.getTime())
+      );
+      const runStatus = willRetry ? "FAILED" : "DEAD";
       await prisma.backgroundJobRun.create({
         data: {
           organizationId,
@@ -276,12 +323,34 @@ export async function runQueuedJobs(
           jobType: job.type as JobType,
           status: "FAILED",
           attemptNumber,
-          startedAt: now,
-          finishedAt: new Date(),
+          startedAt,
+          finishedAt,
           durationMs,
           errorMessage: runErrorMsg,
         },
       });
+      try {
+        await prisma.jobRun.create({
+          data: {
+            organizationId,
+            jobId: job.id,
+            type: job.type,
+            attempt: attemptNumber,
+            status: runStatus,
+            startedAt,
+            finishedAt,
+            durationMs,
+            queueWaitMs,
+            errorMessage: runErrorMsg,
+          },
+        });
+      } catch (jobRunErr) {
+        console.warn("jobrun.create failed", {
+          jobId: job.id,
+          type: job.type,
+          error: jobRunErr instanceof Error ? jobRunErr.message : String(jobRunErr),
+        });
+      }
       pruneOldRuns(organizationId).catch(() => {});
       failed++;
       if (willRetry) requeued++;
@@ -294,4 +363,34 @@ export async function runQueuedJobs(
     failed,
     requeued,
   };
+}
+
+const JOBRUN_RETENTION_DAYS = 30;
+
+/**
+ * Delete JobRun rows older than 30 days for the given organization(s).
+ * Safe to call after runQueuedJobs. Logs count deleted.
+ */
+export async function runJobRunRetention(
+  organizationIds: string[]
+): Promise<{ deleted: number }> {
+  if (organizationIds.length === 0) return { deleted: 0 };
+  const cutoff = new Date(Date.now() - JOBRUN_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  try {
+    const result = await prisma.jobRun.deleteMany({
+      where: {
+        organizationId: { in: organizationIds },
+        createdAt: { lt: cutoff },
+      },
+    });
+    if (result.count > 0) {
+      console.log("jobrun.retention.cleaned", { count: result.count });
+    }
+    return { deleted: result.count };
+  } catch (err) {
+    console.warn("jobrun.retention failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return { deleted: 0 };
+  }
 }

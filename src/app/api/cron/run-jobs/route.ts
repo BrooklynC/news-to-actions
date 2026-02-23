@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { runQueuedJobs } from "@/lib/jobs/runner";
+import { runJobRunRetention, runQueuedJobs } from "@/lib/jobs/runner";
 import { enqueueDueTopicIngestion } from "@/lib/scheduling/ingestion";
 
 const GLOBAL_LIMIT_CAP = 50;
@@ -117,6 +117,8 @@ export async function GET(request: NextRequest) {
         lockedBy,
       });
 
+      await runJobRunRetention([orgId]);
+
     const durationMs = Date.now() - startTime;
     await prisma.cronRun.update({
       where: { id: cronRun.id },
@@ -183,6 +185,8 @@ export async function GET(request: NextRequest) {
 
       if (totalClaimed >= limit) break;
     }
+
+    await runJobRunRetention(orgIds);
 
     const durationMs = Date.now() - startTime;
     await prisma.cronRun.update({

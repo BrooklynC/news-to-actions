@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { formatRelativeTime } from "@/lib/time";
-import { getObservabilitySnapshot, listDeadJobs, requeueDeadJob } from "./actions";
+import { getJobMetrics, getObservabilitySnapshot, listDeadJobs, requeueDeadJob } from "./actions";
 import { runMyOrgJobs } from "../actions";
 
 function formatDuration(ms: number | null): string {
@@ -17,10 +17,22 @@ function truncateError(s: string | null, maxLen: number = 80): string {
   return s.slice(0, maxLen) + "…";
 }
 
+function formatMs(ms: number | null): string {
+  if (ms == null) return "—";
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(2)}s`;
+}
+
+function formatPercent(rate: number | null): string {
+  if (rate == null) return "—";
+  return `${(rate * 100).toFixed(1)}%`;
+}
+
 export default async function ObservabilityPage() {
-  const [snapshot, deadJobs] = await Promise.all([
+  const [snapshot, deadJobs, jobMetrics] = await Promise.all([
     getObservabilitySnapshot(),
     listDeadJobs(),
+    getJobMetrics(),
   ]);
   const {
     failureCount24h,
@@ -183,6 +195,85 @@ export default async function ObservabilityPage() {
           </div>
         )}
       </Card>
+
+      {/* Job Metrics */}
+      {jobMetrics && (
+        <Card className="overflow-hidden">
+          <h3 className="border-b border-zinc-200 px-4 py-3 text-sm font-medium text-zinc-900 dark:border-zinc-700 dark:text-zinc-100">
+            Job Metrics
+          </h3>
+          <div className="grid gap-4 p-4 sm:grid-cols-2">
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50/50 p-4 dark:border-zinc-700 dark:bg-zinc-800/30">
+              <h4 className="mb-3 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Last 24 hours
+              </h4>
+              <dl className="space-y-1.5 text-sm">
+                <div className="flex justify-between gap-2">
+                  <dt className="text-zinc-600 dark:text-zinc-400">Avg duration</dt>
+                  <dd className="font-medium text-zinc-900 dark:text-zinc-100">
+                    {formatMs(jobMetrics.last24h.avgDurationMs)}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-zinc-600 dark:text-zinc-400">P95 duration</dt>
+                  <dd className="font-medium text-zinc-900 dark:text-zinc-100">
+                    {formatMs(jobMetrics.last24h.p95DurationMs)}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-zinc-600 dark:text-zinc-400">Success rate</dt>
+                  <dd className="font-medium text-zinc-900 dark:text-zinc-100">
+                    {formatPercent(jobMetrics.last24h.successRate)}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-zinc-600 dark:text-zinc-400">Avg queue wait</dt>
+                  <dd className="font-medium text-zinc-900 dark:text-zinc-100">
+                    {formatMs(jobMetrics.last24h.avgQueueWaitMs)}
+                  </dd>
+                </div>
+                <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                  {jobMetrics.last24h.totalRuns} runs
+                </p>
+              </dl>
+            </div>
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50/50 p-4 dark:border-zinc-700 dark:bg-zinc-800/30">
+              <h4 className="mb-3 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Last 7 days
+              </h4>
+              <dl className="space-y-1.5 text-sm">
+                <div className="flex justify-between gap-2">
+                  <dt className="text-zinc-600 dark:text-zinc-400">Avg duration</dt>
+                  <dd className="font-medium text-zinc-900 dark:text-zinc-100">
+                    {formatMs(jobMetrics.last7d.avgDurationMs)}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-zinc-600 dark:text-zinc-400">P95 duration</dt>
+                  <dd className="font-medium text-zinc-900 dark:text-zinc-100">
+                    {formatMs(jobMetrics.last7d.p95DurationMs)}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-zinc-600 dark:text-zinc-400">Success rate</dt>
+                  <dd className="font-medium text-zinc-900 dark:text-zinc-100">
+                    {formatPercent(jobMetrics.last7d.successRate)}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-zinc-600 dark:text-zinc-400">Avg queue wait</dt>
+                  <dd className="font-medium text-zinc-900 dark:text-zinc-100">
+                    {formatMs(jobMetrics.last7d.avgQueueWaitMs)}
+                  </dd>
+                </div>
+                <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                  {jobMetrics.last7d.totalRuns} runs
+                </p>
+              </dl>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Dead letters */}
       <Card className="overflow-hidden">

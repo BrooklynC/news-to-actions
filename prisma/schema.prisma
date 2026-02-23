@@ -372,6 +372,25 @@ model BackgroundJobRun {
   @@index([backgroundJobId, startedAt])
 }
 
+model JobRun {
+  id             String   @id @default(cuid())
+  organizationId String
+  jobId          String
+  type           JobType
+  attempt        Int
+  status         String
+  startedAt      DateTime
+  finishedAt     DateTime
+  durationMs     Int
+  queueWaitMs    Int
+  errorMessage   String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, startedAt])
+  @@index([organizationId, type, startedAt])
+  @@index([jobId, attempt])
+}
+
 model CronRun {
   id         String        @id @default(cuid())
   startedAt  DateTime      @default(now())
