@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { requireOrgAndUser } from "@/lib/auth";
 import { normalizeActionTitle } from "@/lib/domain/normalizeActionTitle";
 import { normalizeActionText } from "@/lib/guardrails/dedupe";
+import { enqueueJob } from "@/lib/jobs/queue";
 
 const ACTIONS = "/app/actions";
 const TITLE_MAX = 120;
@@ -165,6 +166,17 @@ export async function updateActionItem(formData: FormData) {
       },
     }),
   ]);
+
+  if (delta.assigneeUserId && assigneeUserId) {
+    await enqueueJob({
+      organizationId,
+      type: "NOTIFY",
+      payload: { organizationId, actionItemId: actionId },
+      idempotencyKey: `notify:${organizationId}:actionItem:${actionId}:ACTION_ASSIGNED`,
+      maxAttempts: 2,
+    });
+  }
+
   redirect(ACTIONS);
 }
 

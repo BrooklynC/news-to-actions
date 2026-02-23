@@ -27,12 +27,13 @@ export async function enqueueJob(options: EnqueueOptions): Promise<string> {
     payload,
     idempotencyKey: providedKey,
     runAt = new Date(),
-    maxAttempts = 3,
+    maxAttempts: optionsMaxAttempts,
   } = options;
 
   const payloadJson = JSON.stringify(payload);
   const idempotencyKey =
     providedKey ?? `${type}:${Object.values(payload).sort().join(":")}`;
+  const maxAttempts = type === "NOTIFY" ? 2 : (optionsMaxAttempts ?? 3);
 
   try {
     const job = await prisma.backgroundJob.create({

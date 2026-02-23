@@ -95,43 +95,82 @@ enum DigestCadence {
   WEEKLY
 }
 
+enum NotificationType {
+  ACTION_ASSIGNED
+}
+
+enum NotificationEntityType {
+  ACTION_ITEM
+}
+
+enum NotificationDeliveryStatus {
+  SENT
+  FAILED
+}
+
 model Organization {
-  id                    String                @id @default(cuid())
-  clerkOrgId            String                @unique
-  name                  String
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
-  memberships           Membership[]
-  topics                Topic[]
-  personas              Persona[]
-  articles              Article[]
-  actionItems           ActionItem[]
-  backgroundJobs        BackgroundJob[]
-  notificationSettings  NotificationSettings?
+  id                   String                @id @default(cuid())
+  clerkOrgId           String                @unique
+  name                 String
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  memberships          Membership[]
+  topics               Topic[]
+  personas             Persona[]
+  articles             Article[]
+  actionItems          ActionItem[]
+  backgroundJobs       BackgroundJob[]
+  notificationSettings NotificationSettings?
+  notifications        Notification[]
 }
 
 model NotificationSettings {
-  id             String        @id @default(cuid())
-  organizationId String        @unique
+  id              String        @id @default(cuid())
+  organizationId  String        @unique
   slackWebhookUrl String?
-  slackChannel   String?
+  slackChannel    String?
   emailRecipients String?
-  digestCadence  DigestCadence @default(OFF)
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  digestCadence   DigestCadence @default(OFF)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
+model Notification {
+  id             String                     @id @default(cuid())
+  organizationId String
+  userId         String
+  type           NotificationType
+  entityType     NotificationEntityType
+  entityId       String
+  title          String
+  body           String?
+  readAt         DateTime?
+  deliveryStatus NotificationDeliveryStatus @default(SENT)
+  deliveredAt    DateTime                   @default(now())
+  lastError      String?
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId, entityType, entityId, type], name: "notification_dedupe_key")
+  @@index([organizationId, userId, readAt])
+  @@index([organizationId, createdAt])
+}
+
 model User {
-  id                   String           @id @default(cuid())
-  clerkUserId          String           @unique
-  email                String?
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
-  memberships          Membership[]
-  assignedActionItems  ActionItem[]     @relation("ActionItemAssignee")
-  actionItemAudits     ActionItemAudit[]
+  id                  String            @id @default(cuid())
+  clerkUserId         String            @unique
+  email               String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  memberships         Membership[]
+  assignedActionItems ActionItem[]      @relation("ActionItemAssignee")
+  actionItemAudits    ActionItemAudit[]
+  notifications       Notification[]
 }
 
 model Membership {
@@ -143,9 +182,9 @@ model Membership {
   user           User         @relation(fields: [userId], references: [id])
   organization   Organization @relation(fields: [organizationId], references: [id])
 
+  @@unique([userId, organizationId])
   @@index([userId])
   @@index([organizationId])
-  @@unique([userId, organizationId])
 }
 
 model Topic {
@@ -173,11 +212,11 @@ model Topic {
 }
 
 model Persona {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   organizationId String
   name           String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
   organization   Organization @relation(fields: [organizationId], references: [id])
   actionItems    ActionItem[]
 
@@ -185,7 +224,7 @@ model Persona {
 }
 
 model Article {
-  id             String    @id @default(cuid())
+  id             String       @id @default(cuid())
   organizationId String
   topicId        String
   url            String
@@ -193,10 +232,10 @@ model Article {
   source         String?
   publishedAt    DateTime?
   summary        String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
   organization   Organization @relation(fields: [organizationId], references: [id])
-  topic          Topic     @relation(fields: [topicId], references: [id])
+  topic          Topic        @relation(fields: [topicId], references: [id])
   actionItems    ActionItem[]
 
   @@unique([organizationId, url])
@@ -205,32 +244,32 @@ model Article {
 }
 
 model ActionItem {
-  id               String           @id @default(cuid())
-  organizationId    String
-  articleId        String?
-  topicId          String?
-  title            String?          // display title; backfilled from text if null
-  description      String?
-  text             String          // legacy: title:description
-  normalizedTitle  String
-  status           ActionStatus     @default(OPEN)
-  priority         String?          // legacy; use priorityLevel when set
-  priorityLevel    ActionPriority?  @default(MEDIUM)
-  personaId        String?
+  id              String            @id @default(cuid())
+  organizationId  String
+  articleId       String?
+  topicId         String?
+  title           String? // display title; backfilled from text if null
+  description     String?
+  text            String // legacy: title:description
+  normalizedTitle String
+  status          ActionStatus      @default(OPEN)
+  priority        String? // legacy; use priorityLevel when set
+  priorityLevel   ActionPriority?   @default(MEDIUM)
+  personaId       String?
   assigneeUserId  String?
-  dueDate          String?
-  confidenceScore  Float?
-  recipeType       ActionRecipeType?
-  createdByAI      Boolean          @default(true)
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  organization     Organization    @relation(fields: [organizationId], references: [id])
-  article          Article?        @relation(fields: [articleId], references: [id])
-  topic            Topic?          @relation(fields: [topicId], references: [id])
-  persona          Persona?        @relation(fields: [personaId], references: [id])
-  assigneeUser     User?           @relation("ActionItemAssignee", fields: [assigneeUserId], references: [id])
-  audits           ActionItemAudit[]
-  events           ActionEvent[]
+  dueDate         String?
+  confidenceScore Float?
+  recipeType      ActionRecipeType?
+  createdByAI     Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  organization    Organization      @relation(fields: [organizationId], references: [id])
+  article         Article?          @relation(fields: [articleId], references: [id])
+  topic           Topic?            @relation(fields: [topicId], references: [id])
+  persona         Persona?          @relation(fields: [personaId], references: [id])
+  assigneeUser    User?             @relation("ActionItemAssignee", fields: [assigneeUserId], references: [id])
+  audits          ActionItemAudit[]
+  events          ActionEvent[]
 
   @@unique([organizationId, articleId, normalizedTitle])
   @@index([organizationId])
@@ -243,13 +282,13 @@ model ActionItem {
 }
 
 model ActionEvent {
-  id             String         @id @default(cuid())
+  id             String          @id @default(cuid())
   organizationId String
   actionId       String
   eventType      ActionEventType
   actorUserId    String?
-  metadata       Json           // small deltas only; { delta?, source }
-  createdAt      DateTime       @default(now())
+  metadata       Json // small deltas only; { delta?, source }
+  createdAt      DateTime        @default(now())
 
   action ActionItem @relation(fields: [actionId], references: [id], onDelete: Cascade)
 
@@ -258,25 +297,26 @@ model ActionEvent {
 }
 
 model ActionItemAudit {
-  id           String    @id @default(cuid())
+  id           String   @id @default(cuid())
   actionItemId String
   actorUserId  String?
   field        String
   oldValue     String?
   newValue     String?
-  createdAt    DateTime  @default(now())
+  createdAt    DateTime @default(now())
 
   actionItem ActionItem @relation(fields: [actionItemId], references: [id], onDelete: Cascade)
   actorUser  User?      @relation(fields: [actorUserId], references: [id])
 
   @@index([actionItemId, createdAt])
 }
+
 model UsageEvent {
-  id             String   @id @default(cuid())
+  id             String      @id @default(cuid())
   organizationId String
-  userId         String?  // optional, useful later even if org-scoped now
+  userId         String? // optional, useful later even if org-scoped now
   action         UsageAction
-  createdAt      DateTime @default(now())
+  createdAt      DateTime    @default(now())
 
   @@index([organizationId, createdAt])
   @@index([organizationId, action, createdAt])
@@ -303,7 +343,7 @@ model BackgroundJob {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   runs         BackgroundJobRun[]
 
   @@unique([organizationId, idempotencyKey])
@@ -313,17 +353,17 @@ model BackgroundJob {
 }
 
 model BackgroundJobRun {
-  id               String     @id @default(cuid())
-  organizationId   String
-  backgroundJobId  String?
-  jobType          JobType
-  status           RunStatus
-  attemptNumber    Int
-  startedAt        DateTime   @default(now())
-  finishedAt       DateTime?
-  durationMs       Int?
-  errorMessage     String?
-  createdAt        DateTime   @default(now())
+  id              String    @id @default(cuid())
+  organizationId  String
+  backgroundJobId String?
+  jobType         JobType
+  status          RunStatus
+  attemptNumber   Int
+  startedAt       DateTime  @default(now())
+  finishedAt      DateTime?
+  durationMs      Int?
+  errorMessage    String?
+  createdAt       DateTime  @default(now())
 
   backgroundJob BackgroundJob? @relation(fields: [backgroundJobId], references: [id], onDelete: SetNull)
 
@@ -333,13 +373,13 @@ model BackgroundJobRun {
 }
 
 model CronRun {
-  id          String        @id @default(cuid())
-  startedAt   DateTime      @default(now())
-  finishedAt  DateTime?
-  status      CronRunStatus @default(RUNNING)
-  error       String?
-  requestId   String?       @unique
-  createdAt   DateTime      @default(now())
+  id         String        @id @default(cuid())
+  startedAt  DateTime      @default(now())
+  finishedAt DateTime?
+  status     CronRunStatus @default(RUNNING)
+  error      String?
+  requestId  String?       @unique
+  createdAt  DateTime      @default(now())
 
   @@index([startedAt])
   @@index([status, startedAt])

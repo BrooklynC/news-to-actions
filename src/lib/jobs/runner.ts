@@ -8,7 +8,9 @@ import { prisma } from "@/lib/db";
 import { executeGenerateActionsForArticle } from "@/lib/domain/generateActions";
 import { executeIngestTopic } from "@/lib/domain/ingestTopic";
 import { executeSummarizeArticle } from "@/lib/domain/summarize";
+import { createNotificationIdempotent } from "@/lib/notifications";
 import { parseJobPayload } from "./schemas";
+import { NotifyPayloadSchema } from "./schemas";
 import type { JobType } from "@prisma/client";
 
 const MAX_ERROR_LENGTH = 5000;
@@ -144,9 +146,57 @@ export async function runQueuedJobs(
           await executeIngestTopic(organizationId, topicId);
           break;
         }
-        case "NOTIFY":
+        case "NOTIFY": {
+          const raw = job.payloadJson;
+          const payload = NotifyPayloadSchema.parse(JSON.parse(raw) as unknown);
+          const actionItemId = payload.actionItemId;
+          const organizationId = payload.organizationId;
+
+          const actionItem = await prisma.actionItem.findUnique({
+            where: { id: actionItemId },
+            select: {
+              organizationId: true,
+              assigneeUserId: true,
+              title: true,
+              text: true,
+            },
+          });
+          if (actionItem === null) {
+            throw new Error(`Action item not found: ${actionItemId}`);
+          }
+          if (actionItem.organizationId !== organizationId) {
+            throw new Error(
+              `Action item org mismatch. Expected ${organizationId}, got ${actionItem.organizationId} for action ${actionItemId}`
+            );
+          }
+          if (!actionItem.assigneeUserId) {
+            throw new Error(`Action item has no assigneeUserId: ${actionItemId}`);
+          }
+
+          const body =
+            actionItem.title?.trim() ||
+            (actionItem.text?.split(":")[0]?.trim() ?? null) ||
+            "You have been assigned an action item.";
+
+          await createNotificationIdempotent({
+            organizationId,
+            userId: actionItem.assigneeUserId,
+            type: "ACTION_ASSIGNED",
+            entityType: "ACTION_ITEM",
+            entityId: actionItemId,
+            title: "New action assigned",
+            body,
+          });
+
+          console.log("job.notify", {
+            jobId: job.id,
+            type: job.type,
+            organizationId,
+            actionItemId,
+          });
+          break;
+        }
         case "RUN_RECIPE":
-          // Placeholders; not implemented yet
           throw new Error(`Job type ${job.type} is not yet implemented`);
         default:
           throw new Error(`Unknown job type: ${job.type}`);
