@@ -87,6 +87,52 @@ export type JobFailureSummary = {
   lastFailedAt: Date | null;
 };
 
+export type SystemHealthSummary = {
+  lastCronRun: {
+    startedAt: Date;
+    finishedAt: Date | null;
+    status: string;
+  } | null;
+  cronFailedCount24h: number;
+  jobFailedCount24h: number;
+};
+
+export async function getSystemHealthSummary(): Promise<SystemHealthSummary> {
+  const orgId = await getOrgId();
+  const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+  const [lastCron, cronFailed24h, jobFailed24h] = await Promise.all([
+    prisma.cronRun.findFirst({
+      orderBy: { startedAt: "desc" },
+      select: { startedAt: true, finishedAt: true, status: true },
+    }),
+    prisma.cronRun.count({
+      where: { status: "FAILED", startedAt: { gte: since24h } },
+    }),
+    orgId
+      ? prisma.backgroundJobRun.count({
+          where: {
+            organizationId: orgId,
+            status: "FAILED",
+            createdAt: { gte: since24h },
+          },
+        })
+      : 0,
+  ]);
+
+  return {
+    lastCronRun: lastCron
+      ? {
+          startedAt: lastCron.startedAt,
+          finishedAt: lastCron.finishedAt,
+          status: lastCron.status,
+        }
+      : null,
+    cronFailedCount24h: cronFailed24h,
+    jobFailedCount24h: jobFailed24h,
+  };
+}
+
 export async function getJobFailureSummary(
   options?: { sinceHours?: number }
 ): Promise<JobFailureSummary> {

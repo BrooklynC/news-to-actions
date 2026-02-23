@@ -26,6 +26,7 @@ import {
   enrichTopicsWithQueueState,
 } from "@/lib/topics/health";
 import type { TopicHealth } from "@/lib/types/topicHealth";
+import { getSystemHealthSummary } from "@/app/app/observability/actions";
 import { IngestCardServer } from "./IngestCard.server";
 
 export default async function ArticlesPage({
@@ -131,6 +132,7 @@ export default async function ArticlesPage({
   const hasAnyArticles = allArticles.length > 0;
 
   const now = new Date();
+  const systemHealth = await getSystemHealthSummary();
 
   return (
     <div className="space-y-6">
@@ -140,9 +142,31 @@ export default async function ArticlesPage({
             title="Articles"
             subtitle="Get the summary and the next steps in one place."
           />
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Updated · {formatRelativeTime(now)}
-          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+            <span>Updated · {formatRelativeTime(now)}</span>
+            <span>
+              Cron ·{" "}
+              {systemHealth.lastCronRun
+                ? `${formatRelativeTime(systemHealth.lastCronRun.startedAt)} · ${systemHealth.lastCronRun.status}`
+                : "No runs yet"}
+            </span>
+            {systemHealth.cronFailedCount24h > 0 && (
+              <a
+                href="/app/observability"
+                className="inline-flex rounded-full bg-red-100 px-2 py-0.5 font-medium text-red-800 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-300 dark:hover:bg-red-900/60"
+              >
+                Cron failures (24h): {systemHealth.cronFailedCount24h}
+              </a>
+            )}
+            {systemHealth.jobFailedCount24h > 0 && (
+              <a
+                href="/app/observability"
+                className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:hover:bg-amber-900/60"
+              >
+                Job failures (24h): {systemHealth.jobFailedCount24h}
+              </a>
+            )}
+          </div>
         </div>
         {orgId && (
           <IngestCardServer
