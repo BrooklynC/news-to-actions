@@ -326,7 +326,7 @@ export default async function ArticlesPage({
                   ) : (
                     <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
                       <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                        No summary yet.
+                        Summary pending.
                       </p>
                       <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-500">
                         Click Summarize to scan.
@@ -349,24 +349,24 @@ export default async function ArticlesPage({
                             rest.length > 0 ? rest.join(":").trim() : null;
                           return (
                             <li
-                              key={i}
-                              className="rounded-xl border border-zinc-100 px-3 py-2 dark:border-zinc-700"
-                            >
+                                key={i}
+                                className="rounded-xl border border-zinc-100 px-3 py-2 dark:border-zinc-700"
+                              >
                               <span
-                                className="line-clamp-1 block font-medium text-zinc-900 dark:text-zinc-100"
+                                className="block truncate font-medium text-zinc-900 dark:text-zinc-100"
                                 title={title}
                               >
                                 {title}
                               </span>
                               {description && (
-                                <details className="mt-1 group">
-                                  <summary className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300">
-                                    View details
-                                  </summary>
-                                  <div className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-400">
-                                    <BulletedText text={description} />
-                                  </div>
-                                </details>
+                                <div className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-400">
+                                  <ClampText
+                                    text={description}
+                                    lines={2}
+                                    moreLabel="Read more"
+                                    lessLabel="Show less"
+                                  />
+                                </div>
                               )}
                             </li>
                           );
@@ -387,11 +387,12 @@ export default async function ArticlesPage({
                   ) : (
                     <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
                       <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                        No actions yet.
+                        No actions yet — generate when ready.
                       </p>
-                      <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-500">
-                        Run this topic to generate.
-                      </p>
+                      <form action={generateActions} className="mt-3">
+                        <input type="hidden" name="articleId" value={a.id} />
+                        <ArticleGenerateButton />
+                      </form>
                     </div>
                   )}
                 </div>

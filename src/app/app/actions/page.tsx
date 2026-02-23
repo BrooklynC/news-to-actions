@@ -189,7 +189,7 @@ export default async function ActionsPage({
           {actionItems.length === 0 ? (
             <Card className="rounded-3xl py-16 text-center">
               <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
-                No actions yet.
+                No actions yet — they&apos;ll appear here once generated.
               </p>
               <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-500">
                 <Link

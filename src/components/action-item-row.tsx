@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BulletedText } from "@/components/ui/BulletedText";
+import { ClampText } from "@/components/ui/ClampText";
 
 export type ActionItemRowItem = {
   id: string;
@@ -155,20 +155,20 @@ export function ActionItemRow({
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1 space-y-1">
               <p
-                className="line-clamp-1 font-medium text-zinc-900 dark:text-zinc-100"
+                className="block max-w-full truncate font-medium text-zinc-900 dark:text-zinc-100"
                 title={item.title}
               >
                 {item.title}
               </p>
               {item.description && (
-                <details className="group">
-                  <summary className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300">
-                    View details
-                  </summary>
-                  <div className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-400">
-                    <BulletedText text={item.description} />
-                  </div>
-                </details>
+                <div className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-400">
+                  <ClampText
+                    text={item.description}
+                    lines={2}
+                    moreLabel="Read more"
+                    lessLabel="Show less"
+                  />
+                </div>
               )}
               {articleTitle != null && (
                 <p className="text-xs text-zinc-500 dark:text-zinc-400">
