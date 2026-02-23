@@ -13,6 +13,7 @@ const PER_ORG_CAP = 25;
 const DEFAULT_LIMIT = 25;
 const DEFAULT_PER_ORG = 10;
 const MAX_ORGS_TO_SCAN = 50;
+const CRON_LOCK_KEY = "cron:run-jobs:global";
 
 function generateRequestId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -64,6 +65,45 @@ export async function GET(request: NextRequest) {
   );
 
   const mode = orgId ? "single-org" : "multi-org";
+
+  const now = new Date();
+  const lockKey = CRON_LOCK_KEY;
+  const expiresAt = new Date(now.getTime() + 5 * 60 * 1000);
+  const owner = requestId;
+
+  await prisma.cronLock.deleteMany({
+    where: { key: lockKey, expiresAt: { lt: now } },
+  });
+
+  let acquired = false;
+  try {
+    await prisma.cronLock.create({
+      data: { key: lockKey, owner, expiresAt },
+    });
+    acquired = true;
+  } catch (e: unknown) {
+    if (
+      e &&
+      typeof e === "object" &&
+      "code" in e &&
+      (e as { code: string }).code === "P2002"
+    ) {
+      acquired = false;
+    } else {
+      throw e;
+    }
+  }
+
+  if (!acquired) {
+    const durationMs = Date.now() - startTime;
+    console.log("cron.run-jobs skipped.overlap", { requestId, lockKey });
+    return NextResponse.json(
+      { ok: true, skipped: true, reason: "overlap", requestId, durationMs },
+      { status: 200 }
+    );
+  }
+
+  try {
   console.log("cron.run-jobs start", {
     requestId,
     mode,
@@ -237,5 +277,20 @@ export async function GET(request: NextRequest) {
       { ok: false, requestId, durationMs },
       { status: 500 }
     );
+  }
+  } finally {
+    if (acquired) {
+      try {
+        await prisma.cronLock.deleteMany({
+          where: { key: lockKey, owner },
+        });
+      } catch (unlockErr) {
+        console.warn("cron.run-jobs lock release failed", {
+          requestId,
+          lockKey,
+          error: unlockErr instanceof Error ? unlockErr.message : String(unlockErr),
+        });
+      }
+    }
   }
 }

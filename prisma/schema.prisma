@@ -391,6 +391,17 @@ model JobRun {
   @@index([jobId, attempt])
 }
 
+model CronLock {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  owner     String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([expiresAt])
+}
+
 model CronRun {
   id         String        @id @default(cuid())
   startedAt  DateTime      @default(now())
