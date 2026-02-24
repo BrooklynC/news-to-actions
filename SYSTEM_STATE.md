@@ -205,23 +205,33 @@ DEAD job surfacing UI: NOT IMPLEMENTED
 * Structured log emitted: job.dead
 * Retry no longer attempted
 
-Monitoring UI for DEAD jobs: IMPLEMENTED + LOCALLY VERIFIED (Feb 24, 2026)
+### Monitoring UI for DEAD jobs: IMPLEMENTED + LOCALLY VERIFIED (Feb 24, 2026)
 
-- Observability page now surfaces:
-  - Total DEAD jobs
+- Observability page surfaces org-scoped dead-letter metrics directly from `BackgroundJob`:
+  - Total DEAD jobs (all time)
   - DEAD (last 24h)
   - DEAD (last 7d)
-  - Breakdown by job type
-  - Recent DEAD jobs table (latest 50)
+  - Breakdown by `JobType`
+  - Recent DEAD jobs table (latest 50, sorted by updatedAt desc)
     - Updated timestamp
     - Job type
     - Attempts vs maxAttempts
-    - RunAt
-    - Idempotency key (truncated)
-    - lastError (truncated)
+    - runAt timestamp
+    - Idempotency key (truncated for readability)
+    - lastError (truncated for scan-first UI)
 
-Status: IMPLEMENTED (mechanics + UI)
-Operational visibility: COMPLETE (org-scoped observability in UI)
+- Verified locally by:
+  - Running cron endpoint successfully (200 OK) against the canonical DB
+  - Confirming metrics + recent rows via Prisma queries against the same DB
+
+Status: IMPLEMENTED (mechanics + UI + DB verified)  
+Operational visibility: COMPLETE for org-scoped DEAD monitoring
+
+Limitations (future hardening opportunity):
+- No error taxonomy grouping (errors shown as raw strings)
+- No alerting thresholds wired to DEAD rate
+- No retry-from-UI capability (read-only panel)
+- No time-range filter beyond fixed 24h / 7d buckets
 
 ---
 
