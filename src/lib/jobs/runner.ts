@@ -15,6 +15,11 @@ import { createNotificationIdempotent } from "@/lib/notifications";
 import { parseJobPayload } from "./schemas";
 import { NotifyPayloadSchema } from "./schemas";
 import type { JobType } from "@prisma/client";
+import { retentionEnforcerHandler } from "./handlers/retentionEnforcer";
+import {
+  getRetentionEnforcerBatchLimit,
+  getRetentionEnforcerDryRun,
+} from "@/lib/env";
 
 const RUN_ERROR_MESSAGE_MAX = 1500;
 const LAST_ERROR_MAX = 2000;
@@ -164,7 +169,7 @@ export async function runQueuedJobs(
         });
       }
 
-      switch (job.type) {
+      switch (job.type as string) {
         case "SUMMARIZE_ARTICLE": {
           const { articleId } = parseJobPayload<{ articleId: string }>(
             job.type,
@@ -221,6 +226,29 @@ export async function runQueuedJobs(
             body,
           });
 
+          break;
+        }
+        case "RETENTION_ENFORCER": {
+          const payload = parseJobPayload<{ asOfIso: string; dryRun?: boolean }>(
+            job.type,
+            job.payloadJson
+          );
+          const asOfIso = payload.asOfIso;
+          const dryRun =
+            payload.dryRun ?? getRetentionEnforcerDryRun();
+          const batchLimit = getRetentionEnforcerBatchLimit();
+          const childLog = log.child({
+            organizationId,
+            jobId: job.id,
+            ...(cronRunId ? { cronRunId } : {}),
+          });
+          await retentionEnforcerHandler({
+            organizationId,
+            asOfIso,
+            dryRun,
+            batchLimit,
+            logger: childLog,
+          });
           break;
         }
         case "RUN_RECIPE":

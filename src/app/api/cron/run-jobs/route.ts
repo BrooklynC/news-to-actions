@@ -8,7 +8,12 @@ import { log } from "@/lib/observability/logger";
 import { wrapUnknownError } from "@/lib/errors";
 import { prisma } from "@/lib/db";
 import { runCronRunRetention, runQueuedJobs } from "@/lib/jobs/runner";
+import { enqueueJob } from "@/lib/jobs/queue";
 import { enqueueDueTopicIngestion } from "@/lib/scheduling/ingestion";
+import {
+  getRetentionEnforcerDryRun,
+  getRetentionEnforcerEnabled,
+} from "@/lib/env";
 
 const GLOBAL_LIMIT_CAP = 50;
 const PER_ORG_CAP = 25;
@@ -189,6 +194,20 @@ export async function GET(request: NextRequest) {
           );
         }
 
+        if (getRetentionEnforcerEnabled()) {
+          const asOfIso = new Date().toISOString();
+          const dayKey = asOfIso.slice(0, 10);
+          await enqueueJob({
+            organizationId: orgId,
+            type: "RETENTION_ENFORCER",
+            payload: {
+              asOfIso,
+              dryRun: getRetentionEnforcerDryRun(),
+            },
+            idempotencyKey: `retention-enforcer:${orgId}:${dayKey}`,
+          });
+        }
+
         const result = await runQueuedJobs({
           organizationId: orgId,
           limit,
@@ -248,6 +267,21 @@ export async function GET(request: NextRequest) {
           orgIds.push(j.organizationId);
         }
         if (orgIds.length >= MAX_ORGS_TO_SCAN) break;
+      }
+      if (getRetentionEnforcerEnabled()) {
+        const asOfIso = new Date().toISOString();
+        const dayKey = asOfIso.slice(0, 10);
+        for (const oid of orgIds) {
+          await enqueueJob({
+            organizationId: oid,
+            type: "RETENTION_ENFORCER",
+            payload: {
+              asOfIso,
+              dryRun: getRetentionEnforcerDryRun(),
+            },
+            idempotencyKey: `retention-enforcer:${oid}:${dayKey}`,
+          });
+        }
       }
       let processedOrgs = 0;
       let totalClaimed = 0;

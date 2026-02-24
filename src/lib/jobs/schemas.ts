@@ -18,18 +18,25 @@ export const NotifyPayloadSchema = z.object({
   notificationType: z.enum(["ACTION_ASSIGNED"]).optional(),
 });
 
+export const RetentionEnforcerPayloadSchema = z.object({
+  asOfIso: z.string().min(1),
+  dryRun: z.boolean().optional(),
+});
+
 export type IngestTopicPayload = z.infer<typeof IngestTopicPayloadSchema>;
 export type SummarizeArticlePayload = z.infer<typeof SummarizeArticlePayloadSchema>;
 export type GenerateActionsForArticlePayload = z.infer<
   typeof GenerateActionsForArticlePayloadSchema
 >;
 export type NotifyPayload = z.infer<typeof NotifyPayloadSchema>;
+export type RetentionEnforcerPayload = z.infer<typeof RetentionEnforcerPayloadSchema>;
 
 const payloadSchemas: Record<string, z.ZodSchema> = {
   INGEST_TOPIC: IngestTopicPayloadSchema,
   SUMMARIZE_ARTICLE: SummarizeArticlePayloadSchema,
   GENERATE_ACTIONS_FOR_ARTICLE: GenerateActionsForArticlePayloadSchema,
   NOTIFY: NotifyPayloadSchema,
+  RETENTION_ENFORCER: RetentionEnforcerPayloadSchema,
 };
 
 export function parseJobPayload<T>(

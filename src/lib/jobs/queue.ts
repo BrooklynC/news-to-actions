@@ -6,6 +6,7 @@ type JobType =
   | "SUMMARIZE_ARTICLE"
   | "GENERATE_ACTIONS_FOR_ARTICLE"
   | "NOTIFY"
+  | "RETENTION_ENFORCER"
   | "RUN_RECIPE";
 
 type EnqueueOptions = {
