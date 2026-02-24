@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { ValidationError } from "@/lib/errors";
 
 type JobType =
   | "INGEST_TOPIC"
@@ -11,7 +12,7 @@ type EnqueueOptions = {
   organizationId: string;
   type: JobType;
   payload: Record<string, unknown>;
-  idempotencyKey?: string;
+  idempotencyKey: string;
   runAt?: Date;
   maxAttempts?: number;
 };
@@ -30,9 +31,15 @@ export async function enqueueJob(options: EnqueueOptions): Promise<string> {
     maxAttempts: optionsMaxAttempts,
   } = options;
 
+  const trimmed = (providedKey ?? "").trim();
+  if (!trimmed) {
+    throw ValidationError("idempotencyKey is required", {
+      code: "IDEMPOTENCY_KEY_REQUIRED",
+    });
+  }
+  const idempotencyKey = trimmed;
+
   const payloadJson = JSON.stringify(payload);
-  const idempotencyKey =
-    providedKey ?? `${type}:${Object.values(payload).sort().join(":")}`;
   const maxAttempts = type === "NOTIFY" ? 2 : (optionsMaxAttempts ?? 3);
 
   try {

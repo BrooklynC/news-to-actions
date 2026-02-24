@@ -329,6 +329,16 @@ export async function runQueuedJobs(
             updatedAt: now,
           },
         });
+        log.warn("job.fail", "Job failed, will retry", {
+          organizationId,
+          jobId: job.id,
+          jobType: job.type,
+          attempt: attemptNumber,
+          durationMs: Math.round(Date.now() - runStart),
+          cronRunId,
+          err: rawErr,
+          meta: { retryable, nextRunAt: nextRunAt.toISOString(), nextAttempts },
+        });
       }
 
       const finishedAt = new Date();
@@ -386,7 +396,10 @@ export async function runQueuedJobs(
           durationMs,
           cronRunId,
           err: rawErr,
-          meta: { retryable, nextRunAt: nextRunAt?.toISOString() },
+          meta: {
+            retryable,
+            ...(nextRunAt != null ? { nextRunAt: nextRunAt.toISOString() } : {}),
+          },
         });
       }
       pruneOldRuns(organizationId).catch(() => {});

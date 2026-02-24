@@ -145,14 +145,112 @@ function isRetryableByMessage(message: string): boolean {
   return false;
 }
 
-/**
- * Map unknown thrown values to AppError. Preserves AppError; wraps others with retryable=false
- * unless the message matches known transient patterns (rate limit, timeout).
- */
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function getString(obj: Record<string, unknown>, key: string): string | undefined {
+  const v = obj[key];
+  return typeof v === "string" ? v : undefined;
+}
+
+function getNumber(obj: Record<string, unknown>, key: string): number | undefined {
+  const v = obj[key];
+  return typeof v === "number" ? v : undefined;
+}
+
+function getErrorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (isObject(e) && typeof e.message === "string") return e.message;
+  if (isObject(e) && isObject(e.error) && typeof (e.error as Record<string, unknown>).message === "string") {
+    return (e.error as Record<string, unknown>).message as string;
+  }
+  return String(e);
+}
+
+function classifyPrismaError(e: unknown): AppError | null {
+  if (!isObject(e)) return null;
+
+  const name = getString(e, "name");
+  const code = getString(e, "code");
+
+  if (name === "PrismaClientKnownRequestError" && code) {
+    if (code === "P2002") {
+      return DbConstraintError("Prisma unique constraint violation", e);
+    }
+    if (code.startsWith("P20")) {
+      return DbError("Prisma request error", {
+        code: "DB_REQUEST_ERROR",
+        retryable: false,
+        cause: e,
+        meta: { prismaCode: code },
+      });
+    }
+  }
+
+  if (name && name.startsWith("PrismaClient")) {
+    const message = getString(e, "message") ?? "";
+    if (TIMEOUT_PATTERNS.some((p) => p.test(message))) {
+      return DbTimeoutError("Prisma timeout", e);
+    }
+    const retryable = isRetryableByMessage(message);
+    return DbError("Prisma client error", {
+      code: "DB_CLIENT_ERROR",
+      retryable,
+      cause: e,
+    });
+  }
+
+  return null;
+}
+
+function classifyOpenAIError(e: unknown): AppError | null {
+  if (!isObject(e)) return null;
+
+  const status =
+    getNumber(e, "status") ??
+    getNumber(e, "statusCode") ??
+    (isObject(e["response"] as unknown)
+      ? getNumber(e["response"] as Record<string, unknown>, "status")
+      : undefined);
+
+  const message = getErrorMessage(e) || "";
+
+  const name = getString(e, "name") ?? "";
+
+  if (status === 429 || RATE_LIMIT_PATTERNS.some((p) => p.test(message))) {
+    return OpenAIRateLimitError(message || "OpenAI rate limit", e);
+  }
+
+  if ((status && status >= 500) || TIMEOUT_PATTERNS.some((p) => p.test(message))) {
+    return OpenAIError(message || "OpenAI transient error", {
+      retryable: true,
+      cause: e,
+    });
+  }
+
+  if (name.toLowerCase().includes("openai")) {
+    return OpenAIError(message || "OpenAI error", {
+      retryable: false,
+      cause: e,
+    });
+  }
+
+  return null;
+}
+
 export function wrapUnknownError(e: unknown): AppError {
   if (e instanceof AppError) return e;
-  const message = e instanceof Error ? e.message : String(e);
+
+  const prisma = classifyPrismaError(e);
+  if (prisma) return prisma;
+
+  const openai = classifyOpenAIError(e);
+  if (openai) return openai;
+
+  const message = getErrorMessage(e);
   const retryable = isRetryableByMessage(message);
+
   return new AppError(message, {
     code: "UNKNOWN",
     kind: "UNKNOWN",
