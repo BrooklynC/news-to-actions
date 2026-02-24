@@ -195,22 +195,12 @@ export async function runQueuedJobs(
           const actionItemId = payload.actionItemId;
           const organizationId = payload.organizationId;
 
-          const actionItem = await prisma.actionItem.findUnique({
-            where: { id: actionItemId },
-            select: {
-              organizationId: true,
-              assigneeUserId: true,
-              title: true,
-              text: true,
-            },
+          const actionItem = await prisma.actionItem.findFirst({
+            where: { id: actionItemId, organizationId },
+            select: { organizationId: true, assigneeUserId: true, title: true, text: true },
           });
           if (actionItem === null) {
             throw new Error(`Action item not found: ${actionItemId}`);
-          }
-          if (actionItem.organizationId !== organizationId) {
-            throw new Error(
-              `Action item org mismatch. Expected ${organizationId}, got ${actionItem.organizationId} for action ${actionItemId}`
-            );
           }
           if (!actionItem.assigneeUserId) {
             throw new Error(`Action item has no assigneeUserId: ${actionItemId}`);
@@ -239,8 +229,8 @@ export async function runQueuedJobs(
           throw new Error(`Unknown job type: ${job.type}`);
       }
 
-      await prisma.backgroundJob.update({
-        where: { id: job.id },
+      const succeededResult = await prisma.backgroundJob.updateMany({
+        where: { id: job.id, organizationId },
         data: {
           status: "SUCCEEDED",
           lockedAt: null,
@@ -249,6 +239,8 @@ export async function runQueuedJobs(
           updatedAt: now,
         },
       });
+      if (succeededResult.count !== 1)
+        throw new Error(`BackgroundJob not found for org during update: ${job.id}`);
       const finishedAt = new Date();
       const durationMs = Math.round(finishedAt.getTime() - startedAt.getTime());
       const queueWaitMs = Math.max(
@@ -320,8 +312,8 @@ export async function runQueuedJobs(
       let nextRunAt: Date | undefined;
 
       if (nextAttempts >= job.maxAttempts) {
-        await prisma.backgroundJob.update({
-          where: { id: job.id },
+        const deadResult = await prisma.backgroundJob.updateMany({
+          where: { id: job.id, organizationId },
           data: {
             status: "DEAD",
             attempts: nextAttempts,
@@ -331,6 +323,8 @@ export async function runQueuedJobs(
             updatedAt: now,
           },
         });
+        if (deadResult.count !== 1)
+          throw new Error(`BackgroundJob not found for org during update: ${job.id}`);
         log.info("job.dead", "Job moved to DEAD", {
           organizationId,
           jobId: job.id,
@@ -343,8 +337,8 @@ export async function runQueuedJobs(
       } else {
         const backoffMs = computeBackoffMs(nextAttempts);
         nextRunAt = new Date(Date.now() + backoffMs);
-        await prisma.backgroundJob.update({
-          where: { id: job.id },
+        const requeueResult = await prisma.backgroundJob.updateMany({
+          where: { id: job.id, organizationId },
           data: {
             status: "QUEUED",
             attempts: nextAttempts,
@@ -355,6 +349,8 @@ export async function runQueuedJobs(
             updatedAt: now,
           },
         });
+        if (requeueResult.count !== 1)
+          throw new Error(`BackgroundJob not found for org during update: ${job.id}`);
         log.warn("job.fail", "Job failed, will retry", {
           organizationId,
           jobId: job.id,
@@ -444,47 +440,14 @@ export async function runQueuedJobs(
   };
 }
 
-const JOBRUN_RETENTION_DAYS = 30;
-
-/**
- * Delete JobRun rows older than 30 days for the given organization(s).
- * Safe to call after runQueuedJobs. Logs count deleted.
- */
-export async function runJobRunRetention(
-  organizationIds: string[]
-): Promise<{ deleted: number }> {
-  if (organizationIds.length === 0) return { deleted: 0 };
-  const cutoff = new Date(Date.now() - JOBRUN_RETENTION_DAYS * 24 * 60 * 60 * 1000);
-  try {
-    const result = await prisma.jobRun.deleteMany({
-      where: {
-        organizationId: { in: organizationIds },
-        createdAt: { lt: cutoff },
-      },
-    });
-    if (result.count > 0) {
-      log.info("jobrun.retention.cleaned", "JobRun retention cleanup", {
-        meta: { deleted: result.count, cutoff: cutoff.toISOString(), orgCount: organizationIds.length },
-      });
-    }
-    return { deleted: result.count };
-  } catch (err) {
-    log.warn("jobrun.retention.failed", "JobRun retention failed", {
-      meta: {
-        deleted: 0,
-        cutoff: cutoff.toISOString(),
-        orgCount: organizationIds.length,
-        error: err instanceof Error ? err.message : String(err),
-      },
-    });
-    return { deleted: 0 };
-  }
-}
+// JobRun is classified as a Core Business Record under the Hybrid Data Permanence Model.
+// Core Business Records are NEVER auto-purged.
+// Any prior retention logic for JobRun has been removed per governance correction (Feb 24, 2026).
 
 const CRONRUN_RETENTION_DAYS = 30;
 
 /**
- * Delete CronRun rows older than 30 days. Safe to call after runJobRunRetention.
+ * Delete CronRun rows older than 30 days. Safe to call after runQueuedJobs.
  * CronRun has no organizationId; orgIds is for logging consistency.
  */
 export async function runCronRunRetention(

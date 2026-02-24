@@ -53,6 +53,8 @@ When working via ChatGPT threads:
 * If requesting pasted output, do NOT include additional steps below that request.
 * Prefer `grep` over `rg` in terminal instructions.
 * Do not commit debug scripts.
+* Roadmap Source of Truth: Any recommended or planned work must exist as an explicit checklist item in ROADMAP.md. If a new task is discovered during discussion, it must be added to ROADMAP.md (via a Cursor prompt) before it is referenced as a "next step." Avoid mentioning out-of-roadmap tasks to prevent confusion and thread drift.
+* All terminal instructions must be provided as a single copyable command only, automatically including a macOS `| pbcopy` variant. No explanatory text may appear before or after the command. Explanations must be requested explicitly by the user.
 
 ## Minimal New Thread Seed Template
 
@@ -116,7 +118,7 @@ Status: IMPLEMENTED + LOCALLY VERIFIED
 * ValidationError thrown if missing/empty
 * P2002 dedupe returns existing job id
 
-Status: IMPLEM+ LOCALLY VERIFIED
+Status: IMPLEMENTED + LOCALLY VERIFIED
 
 ---
 
@@ -127,7 +129,7 @@ Status: IMPLEM+ LOCALLY VERIFIED
   * base: 30 seconds
   * cap: 15 minutes
   * jitter: ±20%
-* nextRunAt updated on failure
+* runAt updated on failure
 * DEAD state after attempts >= maxAttempts
 
 Status: IMPLEMENTED + LOCALLY VERIFIED (NOTIFY fully validated)
@@ -141,9 +143,7 @@ INGEST_TOPIC / SUMMARIZE_ARTICLE / GENERATE_ACTIONS_FOR_ARTICLE full sweep: PART
 ## Endpoint
 
 * /api/cron/run-jobs
-* Publicly callable
-* Secret-gated via x-cron-secret header
-* Not Clerk-gated
+* Externally reachable cron endpoint; secret-gated via x-cron-secret (no Clerk).
 
 Status: IMPLEMENTED + LOCALLY VERIFIED
 
@@ -169,7 +169,7 @@ Manual deterministic test performed:
 
 Status: IMPLEMENTED + LOCALLY VERIFIED (Deterministic test Feb 24, 2026)
 
---## CronRun Tracking
+## CronRun Tracking
 
 * cronRun table
 * status RUNNING → SUCCEEDED / FAILED
@@ -218,11 +218,20 @@ Advanced taxonomy mapping (Prisma/OpenAI timeout classification): NOT COMPLETE
 
 ## JobRun
 
-* Retention: 30 days
-* Best-effort deletion
+Retention: Infinite (Core Business Record)
 
-Status: IMPLEMENTED
-Verification: LOGIC VERIFIED, not explicitly load-tested
+Status: CORRECTED (Feb 24, 2026)
+
+Note:
+- Previous Phase 1 documentation incorrectly listed JobRun as 30-day retained.
+- Under the Hybrid Data Permanence Model, JobRun is classified as a Core Business Record.
+- Core Business Records are NEVER auto-purged.
+- Any retention cleanup logic affecting JobRun must be removed.
+
+Governance Rule (Added Feb 24, 2026):
+- If a conflict exists between older implementation notes and the Data Classification Framework,
+  the Data Classification Framework (Core vs Operational) is authoritative.
+  No implementation may override classification without an explicit ROADMAP.md amendment.
 
 ## BackgroundJobRun
 
@@ -237,7 +246,7 @@ Status: IMPLEMENTED
 
 Status: IMPLEMENTED
 
-Cross-table retentioconsistency audit: NOT COMPLETE
+Cross-table retention consistency audit: NOT COMPLETE
 
 ---
 
@@ -281,6 +290,18 @@ Monitoring UI for DEAD jobs: IMPLEMENTED + LOCALLY VERIFIED (Feb 24, 2026)
 Status: IMPLEMENTED (mechanics + UI)
 Operational visibility: COMPLETE (org-scoped observability in UI)
 
+### Alert Thresholds
+
+Documentation only (no implementation). Suggested default thresholds for cron/job monitoring and alerting:
+
+* **Cron auth denied spikes** (possible attack or misconfig): alert if > 5 denials in 10 minutes.
+* **Cron overlap skips**: warn if > 3 consecutive overlaps OR > 10/day.
+* **Job dead-lettering**: alert if any org has >= 3 DEAD jobs in 1 hour OR >= 10/day.
+* **Job failure rate**: alert if failed/(succeeded+failed) > 20% over last 30 runs (per org).
+* **Retry backlog**: alert if QUEUED jobs (runAt <= now) > 50 for any org for > 15 minutes.
+* **Stale processing reclaim**: alert if reclaimed stale PROCESSING jobs > 0 more than 3 times/day (suggests worker instability).
+* **Cron duration**: warn if durationMs median > 60s or any single run > 5 min.
+
 ---
 
 # 9. Dead Letter Handling
@@ -289,23 +310,7 @@ Operational visibility: COMPLETE (org-scoped observability in UI)
 * Structured log emitted: job.dead
 * Retry no longer attempted
 
-Monitoring UI for DEAD jobs: IMPLEMENTED + LOCALLY VERIFIED (Feb 24, 2026)
-
-- Observability page now surfaces:
-  - Total DEAD jobs
-  - DEAD (last 24h)
-  - DEAD (last 7d)
-  - Breakdown by job type
-  - Recent DEAD jobs table (latest 50)
-    - Updated timestamp
-    - Job type
-    - Attempts vs maxAttempts
-    - RunAt
-    - Idempotency key (truncated)
-    - lastError (truncated)
-
-Status: IMPLEMENTED (mechanics + UI)
-Operational visibility: COMPLETE (org-scoped observability in UI)
+See Observability UI section for DEAD job monitoring details.
 
 ---
 
@@ -369,7 +374,7 @@ GENERATE_ACTIONS_FOR_ARTICLE sweep: NOT COMPLETE
 
 Verified locally:
 
-* Cron secenforcement
+* Cron secret enforcement
 * Overlap guard
 * Idempotency enforcement
 * Backoff + DEAD (NOTIFY)
@@ -385,6 +390,16 @@ Not verified in production:
 ---
 
 # 12. Repo Hygiene
+
+### Git Discipline
+
+* Do NOT use `git add -A`.
+* Always stage files explicitly (e.g., `git add path/to/file.ts`).
+* This prevents accidental commits of unrelated changes.
+* All commits must stage only the files intentionally modified in that step.
+* Commit messages must clearly describe the hardening or roadmap item being addressed.
+
+---
 
 Lint warnings exist (non-blocking):
 
@@ -423,7 +438,7 @@ Issue:
 * Vercel production build failed with:
   "Module not found: Can't resolve '@/lib/env'"
 
-Root Cau:
+Root Cause:
 
 * src/lib/env.ts existed locally but was untracked in git.
 * Vercel builds from repository state, not local filesystem.
@@ -435,6 +450,21 @@ Resolution:
 * Confirmed successful Vercel deployment.
 
 Status: RESOLVED + VERIFIED (Feb 24, 2026)
+
+---
+
+# 15. Data Governance & Org Isolation
+
+### Org Isolation Invariants
+
+* All org-scoped Prisma reads must include organizationId in where clause.
+  * Allowed exception: models without organizationId (e.g., ActionItemAudit) may only be queried after an org-gated parent lookup (ActionItem where { id, organizationId }).
+* All org-scoped Prisma writes must be tenant-guarded at the DB call:
+  * Prefer updateMany/deleteMany with where { id, organizationId } (or other org-scoped predicate) and verify result.count === 1.
+  * Only use update/delete with unique where when the unique key is org-scoped (e.g., NotificationSettings where { organizationId }).
+* Background job processing must preserve tenant boundaries:
+  * claim/query always scoped by organizationId
+  * status updates use tenant-guarded updateMany with count checks.
 
 ---
 
@@ -507,4 +537,636 @@ Operational visibility: COMPLETE (org-scoped observability in UI)
 - Confirmed active Neon endpoint: ep-rough-mud-ais9m3u3-pooler.c-4.us-east-1.aws.neon.tech
 - The ep-snowy-sunset endpoint returned "requested endpoint could not be found" and is not currently valid.
 - DATABASE_URL must reference the active endpoint for migrations and cron processing.
+
+---
+
+# Phase 3 — Data Governance & Integrity
+
+## Data Permanence Philosophy
+
+News Actions operates under a Hybrid Data Permanence Model:
+
+- Core business records are retained indefinitely.
+- Operational/system telemetry is retained for a finite, time-based window.
+- Retention is deterministic and system-level (not org-configurable in v1).
+
+---
+
+## Data Classification Framework
+
+All persisted data is classified into one of three categories.
+
+### A. Core Business Records (Permanent)
+
+Represents organizational memory, accountability, and audit trail.
+
+Retention: Infinite (until explicit org deletion)
+
+Includes:
+- Article
+- ActionItem
+- BackgroundJob
+- JobRun
+
+Rules:
+- Never auto-purged.
+- No soft delete in v1.
+- Removal only via explicit org-level delete workflow (future phase).
+- Referential integrity must be preserved.
+
+---
+
+### B. Operational System Logs (Finite)
+
+Represents system telemetry, runtime exhaust, and debugging data.
+
+Retention: Time-based auto-purge
+
+Includes:
+- BackgroundJobRun
+- Notification
+- UsageEvent
+- CronRun
+
+Retention Windows (System-Level Defaults):
+
+- BackgroundJobRun → 30 days
+- Notification → 30 days
+- UsageEvent → 90 days
+- CronRun → 30 days
+
+Rules:
+- Hard delete after retention window.
+- No archive table in v1.
+- No soft delete flag.
+- Must not cascade delete Core Business Records.
+
+---
+
+## Retention Strategy
+
+Retention is strictly time-based, not count-based.
+
+Rationale:
+- Deterministic
+- Compliance-aligned
+- Predictable storage growth
+- Equal across org sizes
+
+Retention enforcement will be implemented via a future dedicated background job:
+- Name: retention-enforcer
+- Runs daily
+- Org-isolated
+- Idempotent
+- Structured logging required
+- Dry-run mode required before activation
+
+(No implementation in this phase.)
+
+---
+
+## Soft vs Hard Delete Policy
+
+Deletion behavior in News Actions is governed by strict classification rules.
+
+### 1. Core Business Records
+
+Models:
+- Article
+- ActionItem
+- BackgroundJob
+- JobRun
+
+Policy:
+
+- No automatic deletion.
+- No system-triggered hard deletes.
+- No soft delete flags in v1.
+- Records remain permanent unless removed through an explicit org-level deletion workflow (future phase).
+- Deletion, when implemented, must:
+  - Require explicit org authorization
+  - Be irreversible (hard delete)
+  - Generate structured audit logs
+  - Preserve referential integrity validation prior to execution
+
+Rationale:
+Core business records represent organizational memory and accountability. Soft delete flags introduce ambiguity and increase query complexity. Permanent retention until explicit org action maintains audit clarity.
+
+---
+
+### 2. Operational System Logs
+
+Models:
+- BackgroundJobRun
+- Notification
+- UsageEvent
+- CronRun
+
+Policy:
+
+- Automatically removed after retention window.
+- Always hard deleted.
+- No soft delete flag.
+- No archive tables in v1.
+- Deletion must not cascade to Core Business Records.
+- Retention enforcement must be idempotent and structured-log compliant.
+
+Rationale:
+Operational logs are system exhaust and not business artifacts. Hard deletion prevents silent storage growth and simplifies lifecycle management.
+
+---
+
+### 3. Future Considerations (Not Implemented)
+
+- Soft delete may be introduced for specific enterprise export workflows if legally required.
+- Any introduction of soft delete must:
+  - Be model-specific
+  - Include explicit query-layer filtering
+  - Be documented in SYSTEM_STATE prior to implementation
+  - Undergo org isolation audit
+
+No schema changes are authorized in this phase.
+This section defines policy only.
+
+---
+
+## PII Audit Framework
+
+News Actions is designed as a B2B productivity system and does not intentionally collect consumer personal data.
+
+This section defines allowable and prohibited PII storage.
+
+---
+
+### 1. PII Classification
+
+PII includes, but is not limited to:
+
+- Personal email addresses (non-corporate)
+- Personal phone numbers
+- Home addresses
+- Government-issued identifiers
+- Payment information
+- Sensitive demographic data
+- Biometric identifiers
+
+Corporate work emails and names associated with an organization account are classified as **Business Identity Data**, not consumer PII.
+
+---
+
+### 2. Authorized PII Storage
+
+Permitted:
+
+- Organization member name
+- Organization member corporate email
+- Role/assignment metadata
+- Action assignment references
+
+Not Permitted:
+
+- Payment card numbers
+- Social security numbers
+- Personal home addresses
+- Sensitive identity attributes
+- Free-form storage of sensitive personal data
+
+If user-generated content includes PII, the system does not guarantee redaction in v1.
+
+---
+
+### 3. Model-Level Risk Assessment
+
+Potential PII surface areas:
+
+- Article (external content may contain PII)
+- ActionItem (free-text fields)
+- Notification (delivery targets)
+- UsageEvent (actor references)
+
+Policy:
+
+- System does not enrich, extract, or store structured PII from articles.
+- No background process is authorized to persist extracted personal attributes.
+- No model may introduce new personal data fields without SYSTEM_STATE amendment.
+
+---
+
+### 4. AI Processing Constraints
+
+- AI prompts must not intentionally request sensitive personal attributes.
+- AI outputs must not be persisted if they contain newly inferred sensitive identity data.
+- AI-generated summaries are considered derived content of Article and follow Article retention rules.
+
+AI input/output retention policy will be defined separately.
+
+---
+
+### 5. Audit Requirements
+
+Prior to production compliance hardening:
+
+- All Prisma models must be reviewed for unintended PII fields.
+- Free-text fields must be cataloged.
+- Export/delete capability must include all Business Identity Data.
+- No hidden PII persistence layers permitted.
+
+---
+
+### 6. Future Compliance Expansion (Not Implemented)
+
+If enterprise compliance requirements emerge:
+
+- Data mapping documentation must be produced.
+- DPIA (Data Protection Impact Assessment) may be required.
+- Role-based access controls may require tightening.
+- Data subject access workflows may be implemented.
+
+No schema changes are authorized in this phase.
+This section defines governance policy only.
+
+---
+
+## AI Input / Output Retention Policy
+
+News Actions utilizes AI for summarization and action generation. AI processing introduces unique data governance considerations.
+
+This section defines allowable AI data persistence.
+
+---
+
+### 1. AI Input Definition
+
+AI Inputs may include:
+
+- Article content
+- Topic metadata
+- Organization context
+- Persona configuration
+- Prior ActionItem context (if applicable)
+
+AI Inputs are considered derived from existing persisted business records and do not represent new primary data categories.
+
+Policy:
+
+- AI inputs are not separately persisted as raw prompt logs in v1.
+- The system does not store full prompt payload history.
+- Any future prompt logging must be explicitly documented in SYSTEM_STATE prior to implementation.
+
+---
+
+### 2. AI Output Definition
+
+AI Outputs may include:
+
+- Article summaries
+- Generated ActionItems
+- Categorization metadata
+- Structured task recommendations
+
+Policy:
+
+- Persisted outputs (e.g., Summary, ActionItem) are treated as Core Business Records.
+- Outputs inherit retention policy of their parent model.
+- AI reasoning chains are not stored.
+- Model confidence metadata is not persisted in v1.
+
+---
+
+### 3. Prohibited AI Persistence
+
+The following must NOT be stored:
+
+- Full raw LLM request payload logs
+- Full raw LLM response logs beyond structured output
+- Hidden chain-of-thought reasoning
+- Sensitive inferred attributes about individuals
+
+If debugging logs are temporarily enabled, they must:
+- Be environment-gated
+- Be time-limited
+- Never persist to production database tables
+- Be excluded from retention guarantees
+
+---
+
+### 4. Retention Classification
+
+AI-Generated Records fall into:
+
+- Core Business Records → Infinite retention
+- Operational Logs → Finite retention (per retention policy)
+
+No separate AI-specific archive is permitted in v1.
+
+---
+
+### 5. Compliance Position
+
+This approach ensures:
+
+- No shadow storage of AI prompt history
+- No uncontrolled growth of AI payload logs
+- Predictable storage lifecycle
+- Enterprise-ready audit posture
+- Clear separation between business artifacts and model internals
+
+Any future expansion of AI logging must:
+- Amend SYSTEM_STATE
+- Undergo PII review
+- Undergo Org Isolation audit
+- Be reflected in ROADMAP prior to deployment
+
+No schema changes are authorized in this phase.
+This section defines governance policy only.
+
+---
+
+## Audit Completeness Validation
+
+Audit completeness ensures that all critical system actions that affect business records, job execution, or organizational boundaries are traceable and reconstructable.
+
+This section defines mandatory audit guarantees.
+
+---
+
+### 1. Audit Coverage Requirements
+
+The following actions MUST generate structured logs:
+
+- Background job execution start
+- Background job execution completion
+- Background job failure
+- Retry attempts
+- Retention enforcement execution
+- Org-level deletion (future phase)
+- Manual retry triggers
+- System-level configuration changes
+- Emergency kill switch activation (e.g., CRON_DISABLED)
+
+Logs must include:
+- requestId (if applicable)
+- orgId (if applicable)
+- jobId (if applicable)
+- execution status
+- timestamp
+- duration (where relevant)
+- error classification (if failure)
+
+No silent failure paths are permitted.
+
+---
+
+### 2. Referential Integrity Guarantees
+
+The system must ensure:
+
+- No orphaned ActionItems
+- No orphaned BackgroundJobRuns
+- No orphaned JobRuns
+- No cross-org record associations
+
+If a destructive operation is introduced in future phases:
+- Integrity validation must run before execution
+- A structured validation log must be emitted
+
+---
+
+### 3. Deterministic Reconstruction Standard
+
+Given:
+
+- Database state
+- Structured logs
+- BackgroundJob records
+
+It must be possible to reconstruct:
+
+- What jobs ran
+- What jobs failed
+- What jobs were retried
+- What records were created
+- What retention deletions occurred
+- Whether an org boundary was violated
+
+If reconstruction is not possible, the system is considered non-compliant with this policy.
+
+---
+
+### 4. Production Validation Requirement
+
+Prior to production hardening completion:
+
+- Manual validation must confirm logs exist for:
+  - Successful job run
+  - Failed job run
+  - Retry
+  - Retention enforcement (once implemented)
+- CronLock overlap prevention must be validated.
+- CRON_DISABLED must be tested in production environment.
+- Log output must not leak PII.
+
+This validation must be documented prior to Phase 3 completion.
+
+---
+
+### 5. Prohibited States
+
+The following states are explicitly disallowed:
+
+- Background job execution without log emission
+- Silent record deletion
+- Cross-org data mutation without orgId scoping
+- Undocumented schema changes affecting retention or deletion
+
+Any violation requires:
+- Immediate halt of related job
+- Documentation in SYSTEM_STATE
+- ROADMAP update
+
+---
+
+No schema changes are authorized in this phase.
+This section defines audit guarantees only.
+
+---
+
+## Org-Level Export / Delete Capability
+
+News Actions must support a future capability allowing an organization to export and permanently delete its data.
+
+This section defines governance requirements for that capability.
+
+---
+
+### 1. Scope of Export
+
+An org-level export must include all data scoped by orgId, including:
+
+Core Business Records:
+- Article
+- ActionItem
+- BackgroundJob
+- JobRun
+
+Operational Records (if within retention window):
+- BackgroundJobRun
+- Notification
+- UsageEvent
+- CronRun
+
+Business Identity Data:
+- Org members (names, corporate emails, roles)
+- Persona assignments
+- Configuration metadata
+
+Export must be:
+- Complete
+- Deterministic
+- Structured (JSON or equivalent)
+- Org-isolated
+- Timestamped
+
+---
+
+### 2. Scope of Deletion
+
+Deletion must:
+
+- Be irreversible
+- Hard delete all records associated with orgId
+- Remove Core and Operational records
+- Validate referential integrity prior to execution
+- Emit structured audit logs
+
+Deletion must NOT:
+
+- Affect other orgs
+- Cascade beyond orgId scope
+- Leave orphaned records
+- Run without manual confirmation
+
+---
+
+### 3. Authorization Requirements
+
+Org deletion must require:
+
+- Explicit confirmation by org owner
+- Secondary confirmation step
+- Structured audit log entry
+- Unique requestId
+- Timestamp
+- Executing user identity
+
+Optional (future hardening):
+- Time-delayed deletion window
+- Cancellation window
+
+---
+
+### 4. Pre-Deletion Validation
+
+Before deletion executes:
+
+- Integrity scan must confirm no cross-org references
+- Deletion plan summary must be generated
+- Row counts by model must be logged
+- Validation log must be persisted
+
+Deletion must fail safely if integrity validation fails.
+
+---
+
+### 5. Compliance Position
+
+This capability enables:
+
+- Enterprise offboarding
+- Regulatory compliance support
+- Deterministic tenant isolation
+- Clean data lifecycle guarantees
+
+No partial deletion is permitted in v1.
+Deletion is atomic at org level.
+
+---
+
+No schema changes are authorized in this phase.
+This section defines governance only.
+Implementation will require a dedicated future roadmap phase.
+
+---
+
+## Org-Level Deletion (Future Phase)
+
+Core business data may only be removed via:
+
+- Explicit org-level export/delete workflow
+- Manual confirmation
+- Structured audit log entry
+- Irreversible hard delete
+
+Tracked under Phase 3 roadmap.
+
+---
+
+# New Thread Protocol (Canonical Seed Template)
+
+---
+
+## NEW THREAD — News Actions
+
+### Canonical Documents (Authoritative)
+
+The following files MUST be attached in full at the start of every new thread and are binding:
+
+- SYSTEM_STATE.md  
+- ROADMAP.md  
+
+Rules:
+
+- These documents are complete and authoritative.
+- No reinterpretation of checklist wording is allowed.
+- No roadmap items may be invented, reworded, or implied without a Cursor prompt updating ROADMAP.md.
+- If a recommended task is not present on ROADMAP.md, it must be added via Cursor before discussion continues.
+- SYSTEM_STATE operating rules are permanent unless explicitly amended via Cursor.
+
+If any inconsistency appears, it must be flagged before proceeding.
+
+---
+
+### Execution Rules
+
+- No schema changes without an explicit roadmap item.
+- No new jobs without a roadmap item.
+- No production-impacting changes without checklist reference.
+- All recommended changes must be provided as single copyable Cursor prompts.
+- Do not reference out-of-roadmap work.
+- Do not summarize or reinterpret roadmap phases unless explicitly asked.
+
+---
+
+### Current Goal
+
+Each new thread must include a one-sentence goal tied to a specific roadmap checkbox.
+
+Example:
+Goal: Implement retention-enforcer (Phase 3.5)
+
+---
+
+### Constraints
+
+- Org Isolation invariants remain enforced.
+- Multi-tenant guarantees must not regress.
+- Structured logging guarantees remain mandatory.
+- No silent failures permitted.
+- Deterministic behavior required for all background jobs.
+
+---
+
+Threads must not begin implementation planning until alignment with ROADMAP.md is confirmed.
+
+---
 

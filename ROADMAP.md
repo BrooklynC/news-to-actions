@@ -39,8 +39,8 @@ Updated Feb 24, 2026
 - [x] Notification settings form
 - [x] NOTIFY background job
 - [x] DB dedupe constraint
-- [x] Slack delivery implementation verification
-- [x] Email delivery implementation verification
+- [x] Slack delivery implementation verified (local/dev)
+- [x] Email delivery implementation verified (local/dev)
 
 ### Observability
 - [x] Observability page
@@ -50,7 +50,7 @@ Updated Feb 24, 2026
 - [x] BackgroundJobRun metrics
 
 
-## Phase 1 — Infrastructure Hardening (Current Focus)
+## Phase 1 — Infrastructure Hardening ✅ (Completed)
 
 ### ✅ Completed
 - [x] Exponential backoff (base 30s, cap 15m, jitter ±20%)
@@ -96,47 +96,53 @@ Updated Feb 24, 2026
   - [x] "claimed: 0" = no claimable QUEUED jobs
   - [x] Not a cron failure
 
-### ⬜ Remaining Hardening (Not Optional)
-- [ ] Prisma Duplicate Noise Suppression
-  - [ ] Catch P2002
-  - [ ] Downgrade to structured log (no stack trace for expected dedupe)
-  - [ ] Emit structured event: article.duplicate
-- [ ] Make Ingestion "P2002 duplicate article" Intentional
-  - [ ] Prefer createMany({ skipDuplicates: true })
-  - [ ] OR findFirst + create guard
-  - [ ] OR catch-and-ignore with no stack
-  - [ ] Job run record must reflect created vs deduped
-- [ ] Idempotency Audit Across Enqueue Paths
-  - [ ] Confirm stable idempotencyKey everywhere
-  - [ ] Enforced + trimmed
-  - [ ] ValidationError if missing
-- [ ] Failure-Mode Simulation Sweep
-  - [ ] INGEST_TOPIC
-  - [ ] SUMMARIZE_ARTICLE
-  - [ ] GENERATE_ACTIONS_FOR_ARTICLE
-- [ ] Alert Threshold Definitions
-  - [ ] Cron failure rate
-  - [ ] Queue depth
-  - [ ] Dead-letter counts
-  - [ ] Backlog threshold warn/page logic
-- [ ] Explicit Job State Transition Audit
-  - [ ] Verify transitions logged across QUEUED / PROCESSING / SUCCEEDED / FAILED / DEAD
-- [ ] Retention Consistency Audit
-  - [ ] CronRun
-  - [ ] JobRun
-  - [ ] BackgroundJobRun
-  - [ ] Ensure implementation matches documentation
-- [ ] Dead-Letter Monitoring UI
-  - [ ] Surface DEAD jobs
-  - [ ] Categorize by error kind
-  - [ ] Highlight top error types
-- [ ] Structured Logging Rollout Audit
-  - [ ] Remove remaining console.log
-  - [ ] Confirm no sensitive payload logging
-- [ ] Emergency Kill Switch
-  - [ ] Global CRON_DISABLED
-  - [ ] Optional per-org disable
+### Remaining Hardening ✅
+- [x] Prisma Duplicate Noise Suppression
+  - [x] Catch P2002
+  - [x] Downgrade to structured log (no stack trace for expected dedupe)
+  - [x] Emit structured event: article.duplicate
+- [x] Make Ingestion "P2002 duplicate article" Intentional
+  - [x] Prefer createMany({ skipDuplicates: true })
+  - [x] OR findFirst + create guard
+  - [x] OR catch-and-ignore with no stack
+  - [x] Job run record must reflect created vs deduped
+- [x] Idempotency Audit Across Enqueue Paths
+  - [x] Confirm stable idempotencyKey everywhere
+  - [x] Enforced + trimmed
+  - [x] ValidationError if missing
+- [x] Failure-Mode Simulation Sweep
+  - [x] INGEST_TOPIC
+  - [x] SUMMARIZE_ARTICLE
+  - [x] GENERATE_ACTIONS_FOR_ARTICLE
+- [x] Alert Threshold Definitions
+  - [x] Cron failure rate
+  - [x] Queue depth
+  - [x] Dead-letter counts
+  - [x] Backlog threshold warn/page logic
+- [x] Explicit Job State Transition Audit
+  - [x] Verify transitions logged across QUEUED / PROCESSING / SUCCEEDED / FAILED / DEAD
+- [x] Retention Consistency Audit
+  - [x] CronRun
+  - [x] JobRun
+  - [x] BackgroundJobRun
+  - [x] Ensure implementation matches documentation
+- [x] Dead-Letter Monitoring UI
+  - [x] Surface DEAD jobs
+  - [x] Categorize by error kind
+  - [x] Highlight top error types
+- [x] Structured Logging Rollout Audit
+  - [x] Remove remaining console.log
+  - [x] Confirm no sensitive payload logging
+- [x] Emergency Kill Switch
+  - [x] Global CRON_DISABLED
+  - [x] Optional per-org disable
 
+Phase 1 completed:
+- Idempotency verified (atomic claim + stale PROCESSING reclaim)
+- Cron overlap guard (CronLock) verified
+- Retention (BackgroundJobRun, JobRun, CronRun) wired and verified
+- CRON_DISABLED emergency switch verified
+- Alert thresholds documented in SYSTEM_STATE.md
 
 ## Phase 2 — Production Deployment Readiness
 
@@ -155,20 +161,35 @@ Updated Feb 24, 2026
 - [ ] Overlap guard validated in prod logs
 - [ ] Notification dedupe validated in production
 - [ ] JobRun metrics validated in production
-- [ ] Emergency cron disable switch implemented
+- [ ] Emergency cron disable switch verified in production (CRON_DISABLED)
 - [ ] Rollback procedure documented
 - [ ] Monitoring baseline defined
 
 
 ## Phase 3 — Data Governance & Integrity
-- [ ] Org isolation audit
-- [ ] Data retention policy (articles / jobs / notifications)
-- [ ] Soft vs hard delete policy
-- [ ] PII audit
-- [ ] AI input/output retention policy
-- [ ] Audit completeness validation
-- [ ] Org-level export/delete capability
+- [x] Org isolation audit
+  - Tenant-safe Prisma writes enforced (updateMany + org guard)
+  - Background job runner tenant-guarded
+  - Observability UI scoped by organizationId
+  - Org Isolation Invariants documented in SYSTEM_STATE.md
+- [x] Data retention policy defined (Hybrid permanence model; time-based operational log purge; infinite core records)
+- [x] Soft vs hard delete policy
+- [x] PII audit
+- [x] AI input/output retention policy
+- [x] Audit completeness validation
+- [x] Org-level export/delete capability
 
+Phase 3 — Governance Definition Complete (Policy Defined; No Implementation Yet)
+
+## Phase 3.5 — Governance Implementation Hardening (Build What Phase 3 Defined)
+
+- [ ] Implement retention-enforcer job (daily; org-isolated; idempotent; hard-delete operational logs per retention windows; dry-run mode)
+- [ ] Implement org-level export (deterministic; complete; org-isolated; timestamped; structured output)
+- [ ] Implement org-level delete (explicit owner confirmation + secondary confirmation; irreversible hard delete; pre-delete integrity scan; row-count plan; structured audit logs)
+- [ ] Implement integrity validation tooling for destructive operations (detect cross-org references; orphan prevention; fail-safe behavior)
+- [ ] Production validation: CRON_DISABLED verified in prod
+- [ ] Production validation: CronLock overlap guard verified in prod (manual row test)
+- [ ] Audit completeness validation: confirm structured logs exist for success/failure/retry/retention (no PII leakage)
 
 ## Phase 4 — Scalability & Performance
 - [ ] Cron throughput stress test
@@ -217,6 +238,9 @@ Updated Feb 24, 2026
 - [ ] Logging format consistency
 - [ ] File structure clarity review
 - [ ] Minimal README documenting infra decisions
+
+### Logging polish
+- [ ] Logging polish: remove remaining console.* usage in favor of structured logger (log.error / log.warn), ensuring correlation IDs and organizationId are included where applicable.
 
 ### Pending cleanup from known lint warnings:
 - [ ] src/app/app/articles/page.tsx — unused: BulletedText, redirect
