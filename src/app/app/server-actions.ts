@@ -6,7 +6,14 @@ import { getAuthContext } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { enforceCaps } from "@/lib/guardrails/caps";
 import { normalizeActionText } from "@/lib/guardrails/dedupe";
+import { log } from "@/lib/observability/logger";
 import { fetchGoogleNewsRss } from "@/lib/rss";
+
+function isPrismaP2002(e: unknown): boolean {
+  if (!e || typeof e !== "object") return false;
+  const o = e as Record<string, unknown>;
+  return o.code === "P2002" && o.name === "PrismaClientKnownRequestError";
+}
 const ARTICLES = "/app/articles";
 const ACTIONS = "/app/actions";
 
@@ -70,6 +77,8 @@ export async function fetchArticlesForTopic(formData: FormData) {
   if (!topic) redirect(`${ARTICLES}?error=` + encodeURIComponent("Topic not found."));
 
   const items = await fetchGoogleNewsRss(topic.query, 5);
+  let created = 0;
+  let deduped = 0;
   for (const item of items) {
     const cap = await enforceCaps({
       organizationId: org.id,
@@ -88,9 +97,14 @@ export async function fetchArticlesForTopic(formData: FormData) {
           ...(item.publishedAt && { publishedAt: item.publishedAt }),
         },
       });
+      created++;
     } catch (e: unknown) {
-      if (e && typeof e === "object" && "code" in e && (e as { code: string }).code === "P2002") {
-        // Skip duplicate
+      if (isPrismaP2002(e)) {
+        log.info("article.duplicate", "Article skipped (unique constraint)", {
+          organizationId: org.id,
+          meta: { url: item.url, topicId: topic.id },
+        });
+        deduped++;
       } else {
         throw e;
       }
@@ -100,7 +114,11 @@ export async function fetchArticlesForTopic(formData: FormData) {
     where: { id: topic.id },
     data: { lastIngestAt: new Date(), updatedAt: new Date() },
   });
-  redirect(ARTICLES);
+  const message =
+    created > 0 || deduped > 0
+      ? `Fetched articles. ${created} new, ${deduped} already present.`
+      : "Articles fetched.";
+  redirect(`${ARTICLES}?banner=` + encodeURIComponent(message));
 }
 
 export async function updateActionItemStatus(formData: FormData) {
