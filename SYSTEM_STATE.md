@@ -205,10 +205,23 @@ DEAD job surfacing UI: NOT IMPLEMENTED
 * Structured log emitted: job.dead
 * Retry no longer attempted
 
-Monitoring UI for DEAD jobs: NOT IMPLEMENTED
+Monitoring UI for DEAD jobs: IMPLEMENTED + LOCALLY VERIFIED (Feb 24, 2026)
 
-Status: IMPLEMENTED (mechanics)
-Operational visibility: INCOMPLETE
+- Observability page now surfaces:
+  - Total DEAD jobs
+  - DEAD (last 24h)
+  - DEAD (last 7d)
+  - Breakdown by job type
+  - Recent DEAD jobs table (latest 50)
+    - Updated timestamp
+    - Job type
+    - Attempts vs maxAttempts
+    - RunAt
+    - Idempotency key (truncated)
+    - lastError (truncated)
+
+Status: IMPLEMENTED (mechanics + UI)
+Operational visibility: COMPLETE (org-scoped observability in UI)
 
 ---
 
