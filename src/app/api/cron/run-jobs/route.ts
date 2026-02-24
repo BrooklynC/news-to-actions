@@ -57,6 +57,12 @@ export async function GET(request: NextRequest) {
       { status: 401 }
     );
   }
+
+  if (process.env.CRON_DISABLED === "1") {
+    log.warn("cron.disabled", "Cron execution skipped due to CRON_DISABLED=1");
+    return NextResponse.json({ ok: true, disabled: true });
+  }
+
   const orgId = searchParams.get("orgId")?.trim() || null;
   const limit = parseNumber(
     searchParams.get("limit"),

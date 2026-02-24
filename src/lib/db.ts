@@ -8,7 +8,8 @@ declare global {
 export const prisma =
   globalThis.prisma ??
   new PrismaClient({
-    log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
+    // No Prisma stdout logging; we use structured logger + explicit handling (e.g. P2002 duplicate suppression).
+    log: [],
   });
 
 if (process.env.NODE_ENV !== "production") {
