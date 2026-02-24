@@ -283,12 +283,45 @@ export default async function ObservabilityPage() {
       )}
 
       {/* Queue backlog */}
+      {(() => {
+        const dueCount = backlog.dueCount;
+        const severity =
+          dueCount >= 50 ? "PAGE" : dueCount >= 20 ? "WARN" : "OK";
+        return (
       <Card className="overflow-hidden">
-        <h3 className="border-b border-zinc-200 px-4 py-3 text-sm font-medium text-zinc-900 dark:border-zinc-700 dark:text-zinc-100">
+        <h3 className="flex flex-wrap items-center gap-2 border-b border-zinc-200 px-4 py-3 text-sm font-medium text-zinc-900 dark:border-zinc-700 dark:text-zinc-100">
           Queue backlog
-          {backlog.dueCount > 0 && (
-            <span className="ml-2 rounded-full bg-zinc-200 px-2 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-600 dark:text-zinc-200">
-              {backlog.dueCount} due
+          {dueCount === 0 ? (
+            <span className="text-xs font-normal text-zinc-400 dark:text-zinc-500">
+              OK
+            </span>
+          ) : (
+            <span
+              className={
+                severity === "PAGE"
+                  ? "rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 dark:bg-red-900/40 dark:text-red-300"
+                  : severity === "WARN"
+                    ? "rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                    : "rounded-full bg-zinc-200 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-600 dark:text-zinc-200"
+              }
+            >
+              {severity}
+            </span>
+          )}
+          <span className="text-xs font-normal text-zinc-500 dark:text-zinc-400">
+            Warn ≥20 • Page ≥50
+          </span>
+          {dueCount > 0 && (
+            <span
+              className={
+                severity === "PAGE"
+                  ? "rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 dark:bg-red-900/40 dark:text-red-300"
+                  : severity === "WARN"
+                    ? "rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                    : "rounded-full bg-zinc-200 px-2 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-600 dark:text-zinc-200"
+              }
+            >
+              {dueCount} due
             </span>
           )}
         </h3>
@@ -369,6 +402,8 @@ export default async function ObservabilityPage() {
           </div>
         )}
       </Card>
+        );
+      })()}
 
       {/* Dead letters */}
       <Card className="overflow-hidden">
