@@ -331,3 +331,64 @@ Every new thread seed must reference SYSTEM_STATE.md verbatim.
 
 Roadmap updates must align with this document before checkmarks change.
 
+---
+
+## Verification Log — Feb 24, 2026
+
+### Retry & Backoff Mechanics — VERIFIED (Local)
+
+- Proved single-attempt failure + requeue/backoff behavior works correctly for:
+  - INGEST_TOPIC
+  - SUMMARIZE_ARTICLE
+  - GENERATE_ACTIONS_FOR_ARTICLE
+- For each job type:
+  - attempts incremented correctly
+  - BackgroundJobRun rows were written with status=FAILED
+  - lastError captured ("Simulated job failure")
+  - runAt was pushed forward (backoff applied)
+  - status remained QUEUED until maxAttempts reached
+- After disabling SIMULATE_JOB_FAILURE, subsequent cron run SUCCEEDED and cleared lastError.
+
+### DEAD Transition — VERIFIED (Controlled Test)
+
+- Created a controlled INGEST_TOPIC job with maxAttempts=2.
+- Forced two failures.
+- Confirmed:
+  - attempts == maxAttempts
+  - status transitioned to DEAD
+  - lastError retained
+  - No further requeue occurred.
+- Confirmed DEAD job appears in Observability monitoring queries.
+
+### Observability — DEAD Monitoring Panel
+
+Status: IMPLEMENTED + LOCALLY VERIFIED (Feb 24, 2026)
+
+Observability page surfaces:
+- Total DEAD jobs
+- DEAD (last 24h)
+- DEAD (last 7d)
+- Breakdown by job type
+- Recent DEAD jobs table (latest 50)
+  - Updated timestamp
+  - Job type
+  - Attempts vs maxAttempts
+  - RunAt
+  - Idempotency key (truncated)
+  - lastError (truncated)
+
+Operational visibility: COMPLETE (org-scoped observability in UI)
+
+### Simulation Safety
+
+- Confirmed SIMULATE_JOB_FAILURE environment variable properly enables/disables failure simulation.
+- Verified dev server restarted without SIMULATE_JOB_FAILURE.
+- Verified clean cron runs after disabling simulation (no failures, no requeues).
+- Confirmed via `ps` that SIMULATE_JOB_FAILURE was not present in running process.
+
+### Database Endpoint Note
+
+- Confirmed active Neon endpoint: ep-rough-mud-ais9m3u3-pooler.c-4.us-east-1.aws.neon.tech
+- The ep-snowy-sunset endpoint returned "requested endpoint could not be found" and is not currently valid.
+- DATABASE_URL must reference the active endpoint for migrations and cron processing.
+
