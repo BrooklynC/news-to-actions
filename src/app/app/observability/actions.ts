@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@clerk/nextjs/server";
+import { log } from "@/lib/observability/logger";
 import { prisma } from "@/lib/db";
 
 const INGEST_JOB_TYPE = "INGEST_TOPIC";
@@ -120,11 +121,11 @@ export async function requeueDeadJob(formData: FormData) {
     },
   });
 
-  console.log("job.requeued", {
-    actorUserId: userId,
-    jobId: job.id,
+  log.info("job.requeued", "Dead job requeued", {
     organizationId,
-    type: job.type,
+    jobId: job.id,
+    jobType: job.type,
+    meta: { actorUserId: userId, source: "ui" },
   });
 
   redirect(`${OBSERVABILITY}?message=` + encodeURIComponent("Job requeued."));

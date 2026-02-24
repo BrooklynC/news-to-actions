@@ -292,6 +292,74 @@ export default async function ObservabilityPage() {
             </p>
           </div>
         ) : (
+          <>
+            {/* Dead-letter summary */}
+            {(() => {
+              const byType = Object.entries(
+                deadJobs.reduce<Record<string, number>>((acc, j) => {
+                  acc[j.type] = (acc[j.type] ?? 0) + 1;
+                  return acc;
+                }, {})
+              )
+                .map(([type, count]) => ({ type, count }))
+                .sort((a, b) => b.count - a.count);
+
+              const errorCounts = deadJobs
+                .filter((j) => j.lastError != null && j.lastError.trim() !== "")
+                .reduce<Record<string, number>>((acc, j) => {
+                  const e = j.lastError!;
+                  acc[e] = (acc[e] ?? 0) + 1;
+                  return acc;
+                }, {});
+              const topErrors = Object.entries(errorCounts)
+                .map(([fullErr, count]) => ({
+                  display: fullErr.length > 60 ? fullErr.slice(0, 60) + "…" : fullErr,
+                  count,
+                }))
+                .sort((a, b) => b.count - a.count)
+                .slice(0, 5);
+
+              return (
+                <div className="grid grid-cols-1 gap-4 border-b border-zinc-200 p-4 md:grid-cols-2 dark:border-zinc-700">
+                <div>
+                  <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                    By job type
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {byType.map(({ type, count }) => (
+                      <span
+                        key={type}
+                        className="inline-flex items-center rounded-full bg-zinc-200 px-2.5 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-600 dark:text-zinc-200"
+                      >
+                        {type.replace(/_/g, " ")} · {count}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                    Top errors
+                  </h4>
+                  {topErrors.length === 0 ? (
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      No error messages
+                    </p>
+                  ) : (
+                    <ul className="space-y-1.5">
+                      {topErrors.map(({ display, count }, i) => (
+                        <li
+                          key={i}
+                          className="truncate rounded-xl border border-zinc-200 bg-zinc-50/50 px-3 py-1.5 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800/30 dark:text-zinc-300"
+                          title={display}
+                        >
+                          <span className="font-medium">{count}</span> · {display}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            ); })()}
           <div className="overflow-x-auto">
             <table className="w-full min-w-[480px] text-sm">
               <thead>
@@ -353,6 +421,7 @@ export default async function ObservabilityPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </Card>
 
