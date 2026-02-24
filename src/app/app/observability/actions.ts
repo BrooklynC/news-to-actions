@@ -49,6 +49,97 @@ export type DeadJob = {
   updatedAt: Date;
 };
 
+export type DeadJobsSummary = {
+  totals: {
+    totalDead: number;
+    deadLast24h: number;
+    deadLast7d: number;
+  };
+  byType: Array<{ type: string; count: number }>;
+  recent: Array<{
+    id: string;
+    type: string;
+    status: string;
+    attempts: number;
+    maxAttempts: number;
+    runAt: string;
+    updatedAt: string;
+    idempotencyKey: string;
+    lastError: string | null;
+  }>;
+};
+
+const emptyDeadJobsSummary: DeadJobsSummary = {
+  totals: { totalDead: 0, deadLast24h: 0, deadLast7d: 0 },
+  byType: [],
+  recent: [],
+};
+
+export async function getDeadJobsSummary(): Promise<DeadJobsSummary> {
+  const orgId = await getOrgId();
+  if (!orgId) return emptyDeadJobsSummary;
+
+  const now = new Date();
+  const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const last7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+  const whereDead = { organizationId: orgId, status: "DEAD" as const };
+
+  const [totalDead, deadLast24h, deadLast7d, grouped, recentJobs] =
+    await Promise.all([
+      prisma.backgroundJob.count({ where: whereDead }),
+      prisma.backgroundJob.count({
+        where: { ...whereDead, updatedAt: { gte: last24h } },
+      }),
+      prisma.backgroundJob.count({
+        where: { ...whereDead, updatedAt: { gte: last7d } },
+      }),
+      prisma.backgroundJob.groupBy({
+        by: ["type"],
+        where: whereDead,
+        _count: { id: true },
+      }),
+      prisma.backgroundJob.findMany({
+        where: whereDead,
+        orderBy: { updatedAt: "desc" },
+        take: 50,
+        select: {
+          id: true,
+          type: true,
+          status: true,
+          attempts: true,
+          maxAttempts: true,
+          runAt: true,
+          updatedAt: true,
+          idempotencyKey: true,
+          lastError: true,
+        },
+      }),
+    ]);
+
+  const byType = grouped
+    .map((g) => ({ type: g.type, count: g._count.id }))
+    .sort((a, b) => b.count - a.count);
+
+  const recent = recentJobs.map((j) => ({
+    id: j.id,
+    type: j.type,
+    status: j.status,
+    attempts: j.attempts,
+    maxAttempts: j.maxAttempts,
+    runAt: j.runAt.toISOString(),
+    updatedAt: j.updatedAt.toISOString(),
+    idempotencyKey: j.idempotencyKey,
+    lastError: j.lastError,
+  }));
+
+  return {
+    totals: { totalDead, deadLast24h, deadLast7d },
+    byType,
+    recent,
+  };
+}
+
 export async function listDeadJobs(): Promise<DeadJob[]> {
   const orgId = await getOrgId();
   if (!orgId) return [];

@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { formatRelativeTime } from "@/lib/time";
 import {
+  getDeadJobsSummary,
   getJobMetrics,
   getObservabilitySnapshot,
   getQueueBacklogSummary,
@@ -35,12 +36,14 @@ function formatPercent(rate: number | null): string {
 }
 
 export default async function ObservabilityPage() {
-  const [snapshot, deadJobs, jobMetrics, backlog] = await Promise.all([
-    getObservabilitySnapshot(),
-    listDeadJobs(),
-    getJobMetrics(),
-    getQueueBacklogSummary(),
-  ]);
+  const [snapshot, deadJobs, jobMetrics, backlog, deadSummary] =
+    await Promise.all([
+      getObservabilitySnapshot(),
+      listDeadJobs(),
+      getJobMetrics(),
+      getQueueBacklogSummary(),
+      getDeadJobsSummary(),
+    ]);
   const {
     failureCount24h,
     cronFailedCount24h,
@@ -404,6 +407,139 @@ export default async function ObservabilityPage() {
       </Card>
         );
       })()}
+
+      {/* Dead-letter Jobs (monitoring summary) */}
+      <Card className="overflow-hidden">
+        <h3 className="border-b border-zinc-200 px-4 py-3 text-sm font-medium text-zinc-900 dark:border-zinc-700 dark:text-zinc-100">
+          Dead-letter Jobs
+        </h3>
+        {deadSummary.totals.totalDead === 0 ? (
+          <div className="p-6 text-center">
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              No dead-letter jobs.
+            </p>
+          </div>
+        ) : (
+          <div className="p-4">
+            <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50/50 p-3 dark:border-zinc-700 dark:bg-zinc-800/30">
+                <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  Total DEAD
+                </p>
+                <p className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                  {deadSummary.totals.totalDead}
+                </p>
+              </div>
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50/50 p-3 dark:border-zinc-700 dark:bg-zinc-800/30">
+                <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  DEAD (24h)
+                </p>
+                <p className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                  {deadSummary.totals.deadLast24h}
+                </p>
+              </div>
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50/50 p-3 dark:border-zinc-700 dark:bg-zinc-800/30">
+                <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  DEAD (7d)
+                </p>
+                <p className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                  {deadSummary.totals.deadLast7d}
+                </p>
+              </div>
+            </div>
+            {deadSummary.byType.length > 0 && (
+              <div className="mb-4">
+                <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  By type
+                </h4>
+                <ul className="space-y-1 text-sm">
+                  {deadSummary.byType.map(({ type, count }) => (
+                    <li
+                      key={type}
+                      className="flex justify-between gap-2 text-zinc-700 dark:text-zinc-300"
+                    >
+                      <span>{type.replace(/_/g, " ")}</span>
+                      <span className="font-medium">{count}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {deadSummary.recent.length > 0 && (
+              <div className="overflow-x-auto">
+                <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  Recent DEAD Jobs
+                </h4>
+                <table className="w-full min-w-[560px] text-sm">
+                  <thead>
+                    <tr className="border-b border-zinc-200 bg-zinc-50/80 dark:border-zinc-700 dark:bg-zinc-800/50">
+                      <th className="px-4 py-2 text-left font-medium text-zinc-700 dark:text-zinc-300">
+                        Updated
+                      </th>
+                      <th className="px-4 py-2 text-left font-medium text-zinc-700 dark:text-zinc-300">
+                        Type
+                      </th>
+                      <th className="px-4 py-2 text-left font-medium text-zinc-700 dark:text-zinc-300">
+                        Attempts
+                      </th>
+                      <th className="px-4 py-2 text-left font-medium text-zinc-700 dark:text-zinc-300">
+                        Run at
+                      </th>
+                      <th className="max-w-[120px] px-4 py-2 text-left font-medium text-zinc-700 dark:text-zinc-300">
+                        Idempotency
+                      </th>
+                      <th className="max-w-[180px] px-4 py-2 text-left font-medium text-zinc-700 dark:text-zinc-300">
+                        Last error
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {deadSummary.recent.map((j) => (
+                      <tr
+                        key={j.id}
+                        className="border-b border-zinc-100 last:border-0 dark:border-zinc-800"
+                      >
+                        <td
+                          className="max-w-[80px] truncate px-4 py-2 text-zinc-600 dark:text-zinc-400"
+                          title={j.updatedAt}
+                        >
+                          {formatRelativeTime(new Date(j.updatedAt))}
+                        </td>
+                        <td className="max-w-[140px] truncate px-4 py-2 font-medium text-zinc-900 dark:text-zinc-100">
+                          {j.type.replace(/_/g, " ")}
+                        </td>
+                        <td className="px-4 py-2 text-zinc-600 dark:text-zinc-400">
+                          {j.attempts} / {j.maxAttempts}
+                        </td>
+                        <td
+                          className="max-w-[80px] truncate px-4 py-2 text-zinc-600 dark:text-zinc-400"
+                          title={j.runAt}
+                        >
+                          {formatRelativeTime(new Date(j.runAt))}
+                        </td>
+                        <td
+                          className="max-w-[120px] truncate px-4 py-2 text-zinc-600 dark:text-zinc-400"
+                          title={j.idempotencyKey}
+                        >
+                          {j.idempotencyKey.length > 24
+                            ? j.idempotencyKey.slice(0, 24) + "…"
+                            : j.idempotencyKey}
+                        </td>
+                        <td
+                          className="max-w-[180px] truncate px-4 py-2 text-zinc-600 dark:text-zinc-400"
+                          title={j.lastError ?? undefined}
+                        >
+                          {truncateError(j.lastError, 60)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
 
       {/* Dead letters */}
       <Card className="overflow-hidden">
