@@ -12,7 +12,26 @@ It records what is:
 * DESIGN ONLY
 * NOT STARTED
 
-Roadmap checkboxes must reference this file — not memory, not threads.
+## Roadmap Authority
+
+The canonical roadmap lives in `ROADMAP.md` at the repo root.
+
+* `ROADMAP.md` is the single source of truth for:
+  * Phase structure
+  * Checkbox completion state
+  * Future work planning
+* `SYSTEM_STATE.md` documents:
+  * What is currently implemented
+  * Where it is implemented (key files)
+  * How to verify it locally
+  * Operational notes / caveats / known gotchas
+
+Governance rule:
+When a roadmap item is marked complete in ROADMAP.md, SYSTEM_STATE.md must contain a corresponding "Verification" note (how we know it works).
+
+## Roadmap
+
+See `ROADMAP.md` for the full phase roadmap and checkbox status.
 
 ---
 
@@ -195,7 +214,24 @@ Production verification: NOT VERIFIED
 * Backlog severity badge (OK / WARN / PAGE)
 
 Status: IMPLEMENTED
-DEAD job surfacing UI: NOT IMPLEMENTED
+
+Monitoring UI for DEAD jobs: IMPLEMENTED + LOCALLY VERIFIED (Feb 24, 2026)
+
+- Observability page now surfaces:
+  - Total DEAD jobs
+  - DEAD (last 24h)
+  - DEAD (last 7d)
+  - Breakdown by job type
+  - Recent DEAD jobs table (latest 50)
+    - Updated timestamp
+    - Job type
+    - Attempts vs maxAttempts
+    - RunAt
+    - Idempotency key (truncated)
+    - lastError (truncated)
+
+Status: IMPLEMENTED (mechanics + UI)
+Operational visibility: COMPLETE (org-scoped observability in UI)
 
 ---
 
@@ -205,33 +241,65 @@ DEAD job surfacing UI: NOT IMPLEMENTED
 * Structured log emitted: job.dead
 * Retry no longer attempted
 
-### Monitoring UI for DEAD jobs: IMPLEMENTED + LOCALLY VERIFIED (Feb 24, 2026)
+Monitoring UI for DEAD jobs: IMPLEMENTED + LOCALLY VERIFIED (Feb 24, 2026)
 
-- Observability page surfaces org-scoped dead-letter metrics directly from `BackgroundJob`:
-  - Total DEAD jobs (all time)
+- Observability page now surfaces:
+  - Total DEAD jobs
   - DEAD (last 24h)
   - DEAD (last 7d)
-  - Breakdown by `JobType`
-  - Recent DEAD jobs table (latest 50, sorted by updatedAt desc)
+  - Breakdown by job type
+  - Recent DEAD jobs table (latest 50)
     - Updated timestamp
     - Job type
     - Attempts vs maxAttempts
-    - runAt timestamp
-    - Idempotency key (truncated for readability)
-    - lastError (truncated for scan-first UI)
+    - RunAt
+    - Idempotency key (truncated)
+    - lastError (truncated)
 
-- Verified locally by:
-  - Running cron endpoint successfully (200 OK) against the canonical DB
-  - Confirming metrics + recent rows via Prisma queries against the same DB
+Status: IMPLEMENTED (mechanics + UI)
+Operational visibility: COMPLETE (org-scoped observability in UI)
 
-Status: IMPLEMENTED (mechanics + UI + DB verified)  
-Operational visibility: COMPLETE for org-scoped DEAD monitoring
+---
 
-Limitations (future hardening opportunity):
-- No error taxonomy grouping (errors shown as raw strings)
-- No alerting thresholds wired to DEAD rate
-- No retry-from-UI capability (read-only panel)
-- No time-range filter beyond fixed 24h / 7d buckets
+## Phase 1 — Infrastructure Hardening (Status)
+
+Reflects implemented and verified work (Feb 24, 2026):
+
+* Exponential backoff (base 30s, cap 15m, jitter ±20%)
+* Dead-letter handling (DEAD after attempts >= maxAttempts)
+* Cron overlap guard via CronLock (unique + TTL)
+* Cron auth enforcement via x-cron-secret (401 without secret; 200 with secret)
+* Multi-org cron execution mode
+* CronRun tracking
+* BackgroundJobRun tracking
+* JobRun metrics
+* NOTIFY job with DB-level dedupe constraint
+* Prisma duplicate noise suppression for articles:
+  * Catch P2002
+  * Emit structured log event: "article.duplicate"
+  * No stack trace for expected dedupe
+  * Visible in both server-actions ingestion and job ingestion code paths
+
+Key files:
+
+* src/app/api/cron/run-jobs/route.ts
+* src/lib/jobs/runner.ts
+* src/lib/jobs/queue.ts
+* prisma/schema.prisma (BackgroundJob, BackgroundJobRun, CronLock, CronRun)
+* src/app/app/observability/page.tsx
+* src/app/app/observability/actions.ts
+* src/lib/observability/logger.ts
+* src/lib/domain/ingestTopic.ts
+* src/app/app/server-actions.ts
+* src/lib/env.ts (dev simulation helper)
+
+### Local Verification Evidence (Feb 24, 2026)
+
+* Local build succeeded: `pnpm run build`
+* Cron endpoint secret-gated: 401 when missing/incorrect secret; 200 with secret
+* Job runner processes jobs and records results (claimed/succeeded/failed/requeued)
+* Simulation sweep sanity: SIMULATE_JOB_FAILURE used to force controlled failures; confirmed attempts increment, runAt backoff behavior, and DEAD state after maxAttempts
+* Dead-letter UI confirmed by creating at least one DEAD job and seeing it show up in /app/observability
 
 ---
 
@@ -329,7 +397,7 @@ This file defines truth.
 
 Every new thread seed must reference SYSTEM_STATE.md verbatim.
 
-Roadmap updates must align with this document before checkmarks change.
+Checkbox updates go in ROADMAP.md; verification evidence belongs in this document.
 
 ---
 
