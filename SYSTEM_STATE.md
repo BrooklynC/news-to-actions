@@ -12,26 +12,74 @@ It records what is:
 * DESIGN ONLY
 * NOT STARTED
 
-## Roadmap Authority
+## Canonical Document Authority
 
-The canonical roadmap lives in `ROADMAP.md` at the repo root.
+This repo uses two governance documents:
 
-* `ROADMAP.md` is the single source of truth for:
-  * Phase structure
-  * Checkbox completion state
-  * Future work planning
-* `SYSTEM_STATE.md` documents:
-  * What is currently implemented
-  * Where it is implemented (key files)
-  * How to verify it locally
-  * Operational notes / caveats / known gotchas
+* `ROADMAP.md`
+  * Single source of truth for:
+    * Phase structure
+    * Feature checklist completion state
+    * Future work planning
 
-Governance rule:
-When a roadmap item is marked complete in ROADMAP.md, SYSTEM_STATE.md must contain a corresponding "Verification" note (how we know it works).
+* `SYSTEM_STATE.md`
+  * Single source of truth for:
+    * What is currently implemented
+    * Where it is implemented (key files)
+    * How to verify it locally
+    * Operational runbooks and caveats
 
-## Roadmap
+Do not duplicate the roadmap in SYSTEM_STATE.md.
+Reference `ROADMAP.md` for all phase planning and checkbox state.
 
-See `ROADMAP.md` for the full phase roadmap and checkbox status.
+## Definition of Done (Governance Rule)
+
+A roadmap item may only be marked complete in `ROADMAP.md` if:
+
+1) Implementation exists in the codebase.
+2) SYSTEM_STATE.md includes:
+   * A short implementation summary.
+   * File pointers (where relevant).
+   * A brief verification note (how we know it works).
+
+No checkbox should be checked without a verification note in SYSTEM_STATE.md.
+
+## Thread Working Rules
+
+When working via ChatGPT threads:
+
+* Present decision points first.
+* Then provide ONE copy/paste Cursor prompt OR ONE terminal command at a time.
+* If requesting pasted output, do NOT include additional steps below that request.
+* Prefer `grep` over `rg` in terminal instructions.
+* Do not commit debug scripts.
+
+## Minimal New Thread Seed Template
+
+Use the following template when starting a new ChatGPT thread:
+
+---
+
+NEW THREAD — News Actions
+
+Canonical docs:
+- SYSTEM_STATE.md (current implementation + verification + runbooks)
+- ROADMAP.md (phase plan + checkbox state)
+
+Working rules:
+- Decision points first
+- Then ONE Cursor prompt or ONE terminal command at a time
+- If asking me to paste output, do NOT include next steps after that
+
+Goal for this thread:
+<Insert objective here>
+
+Constraints (optional):
+<Insert constraints here>
+
+---
+
+This template avoids rebuilding architecture context in every thread.
 
 ---
 

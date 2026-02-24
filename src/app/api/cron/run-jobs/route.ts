@@ -16,6 +16,7 @@ const DEFAULT_LIMIT = 25;
 const DEFAULT_PER_ORG = 10;
 const MAX_ORGS_TO_SCAN = 50;
 const CRON_LOCK_KEY = "cron:run-jobs:global";
+const STALE_JOB_LOCK_MS = 30 * 60 * 1000; // 30 minutes
 
 function generateRequestId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -119,197 +120,221 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-  const cronRun = await prisma.cronRun.create({
-    data: { requestId, status: "RUNNING" },
-  });
-
-  log.info("cron.start", "Cron run started", {
-    requestId,
-    cronRunId: cronRun.id,
-    meta: { mode, ...(orgId ? { orgId } : {}), limit, perOrg },
-  });
-
-  try {
-    const now = new Date();
-    const lockedBy = `cron:${now.toISOString().slice(0, 16).replace(/[-T:]/g, "")}`;
-
-    const scheduling = await enqueueDueTopicIngestion({
-      now,
-      globalLimit: limit,
-      perOrgLimit: perOrg,
-      lockedBy,
-      ...(orgId ? { organizationId: orgId } : {}),
+    const cronRun = await prisma.cronRun.create({
+      data: { requestId, status: "RUNNING" },
     });
 
-    if (orgId) {
-      const org = await prisma.organization.findUnique({
-        where: { id: orgId },
-        select: { id: true },
+    log.info("cron.start", "Cron run started", {
+      requestId,
+      cronRunId: cronRun.id,
+      meta: { mode, ...(orgId ? { orgId } : {}), limit, perOrg },
+    });
+
+    try {
+      const now = new Date();
+      const lockedBy = `cron:${now.toISOString().slice(0, 16).replace(/[-T:]/g, "")}`;
+
+      const staleCutoff = new Date(now.getTime() - STALE_JOB_LOCK_MS);
+      const reclaimed = await prisma.backgroundJob.updateMany({
+        where: {
+          status: "PROCESSING",
+          lockedAt: { not: null, lt: staleCutoff },
+        },
+        data: {
+          status: "QUEUED",
+          lockedAt: null,
+          lockedBy: null,
+          updatedAt: now,
+        },
       });
-      if (!org) {
+      if (reclaimed.count > 0) {
+        log.warn("jobs.reclaimed_stale_processing", "Reclaimed stale PROCESSING jobs", {
+          requestId,
+          meta: { reclaimed: reclaimed.count, staleCutoff: staleCutoff.toISOString() },
+        });
+      } else {
+        log.info("jobs.reclaimed_stale_processing.none", "No stale PROCESSING jobs to reclaim", {
+          requestId,
+        });
+      }
+
+      const scheduling = await enqueueDueTopicIngestion({
+        now,
+        globalLimit: limit,
+        perOrgLimit: perOrg,
+        lockedBy,
+        ...(orgId ? { organizationId: orgId } : {}),
+      });
+
+      if (orgId) {
+        const org = await prisma.organization.findUnique({
+          where: { id: orgId },
+          select: { id: true },
+        });
+        if (!org) {
+          const durationMs = Date.now() - startTime;
+          await prisma.cronRun.update({
+            where: { id: cronRun.id },
+            data: { finishedAt: new Date(), status: "FAILED", error: "Organization not found" },
+          });
+          log.warn("cron.done", "Cron run finished with error", {
+            requestId,
+            cronRunId: cronRun.id,
+            durationMs,
+            meta: { status: "error", mode, error: "Organization not found" },
+          });
+          return NextResponse.json(
+            { ok: false, error: "Organization not found", requestId, durationMs },
+            { status: 404 }
+          );
+        }
+
+        const result = await runQueuedJobs({
+          organizationId: orgId,
+          limit,
+          lockedBy,
+          cronRunId: cronRun.id,
+        });
+
+        await runJobRunRetention([orgId]);
+        await runCronRunRetention([orgId]);
+
         const durationMs = Date.now() - startTime;
         await prisma.cronRun.update({
           where: { id: cronRun.id },
-          data: { finishedAt: new Date(), status: "FAILED", error: "Organization not found" },
+          data: { finishedAt: new Date(), status: "SUCCEEDED", error: null },
         });
-        log.warn("cron.done", "Cron run finished with error", {
+        log.info("cron.done", "Cron run finished", {
           requestId,
           cronRunId: cronRun.id,
           durationMs,
-          meta: { status: "error", mode, error: "Organization not found" },
+          meta: {
+            mode: "single-org",
+            orgId,
+            jobsProcessed: result.processed,
+            jobsSkipped: 0,
+            jobsFailed: result.failed,
+            succeeded: result.succeeded,
+            requeued: result.requeued,
+          },
         });
-        return NextResponse.json(
-          { ok: false, error: "Organization not found", requestId, durationMs },
-          { status: 404 }
-        );
+
+        return NextResponse.json({
+          ok: true,
+          mode: "single-org",
+          orgId,
+          requestId,
+          durationMs,
+          scheduling,
+          totals: {
+            claimed: result.processed,
+            succeeded: result.succeeded,
+            failed: result.failed,
+            requeued: result.requeued,
+          },
+        });
       }
 
-      const result = await runQueuedJobs({
-        organizationId: orgId,
-        limit,
-        lockedBy,
+      const jobs = await prisma.backgroundJob.findMany({
+        where: { status: "QUEUED", runAt: { lte: now } },
+        select: { organizationId: true },
+        orderBy: { runAt: "asc" },
+        take: 500,
+      });
+      const seen = new Set<string>();
+      const orgIds: string[] = [];
+      for (const j of jobs) {
+        if (!seen.has(j.organizationId)) {
+          seen.add(j.organizationId);
+          orgIds.push(j.organizationId);
+        }
+        if (orgIds.length >= MAX_ORGS_TO_SCAN) break;
+      }
+      let processedOrgs = 0;
+      let totalClaimed = 0;
+      let totalSucceeded = 0;
+      let totalFailed = 0;
+      let totalRequeued = 0;
+
+      for (const oid of orgIds) {
+        if (totalClaimed >= limit) break;
+
+        const result = await runQueuedJobs({
+          organizationId: oid,
+          limit: perOrg,
+          lockedBy,
+          cronRunId: cronRun.id,
+        });
+
+        processedOrgs++;
+        totalClaimed += result.processed;
+        totalSucceeded += result.succeeded;
+        totalFailed += result.failed;
+        totalRequeued += result.requeued;
+
+        if (totalClaimed >= limit) break;
+      }
+
+      await runJobRunRetention(orgIds);
+      await runCronRunRetention(orgIds);
+
+      const durationMs = Date.now() - startTime;
+      await prisma.cronRun.update({
+        where: { id: cronRun.id },
+        data: { finishedAt: new Date(), status: "SUCCEEDED", error: null },
+      });
+      log.info("cron.done", "Cron run finished", {
+        requestId,
         cronRunId: cronRun.id,
+        durationMs,
+        meta: {
+          mode: "multi-org",
+          processedOrgs,
+          jobsProcessed: totalClaimed,
+          jobsSkipped: 0,
+          jobsFailed: totalFailed,
+          succeeded: totalSucceeded,
+          requeued: totalRequeued,
+        },
       });
 
-      await runJobRunRetention([orgId]);
-      await runCronRunRetention([orgId]);
-
-    const durationMs = Date.now() - startTime;
-    await prisma.cronRun.update({
-      where: { id: cronRun.id },
-      data: { finishedAt: new Date(), status: "SUCCEEDED", error: null },
-    });
-    log.info("cron.done", "Cron run finished", {
-      requestId,
-      cronRunId: cronRun.id,
-      durationMs,
-      meta: {
-        mode: "single-org",
-        orgId,
-        jobsProcessed: result.processed,
-        jobsSkipped: 0,
-        jobsFailed: result.failed,
-        succeeded: result.succeeded,
-        requeued: result.requeued,
-      },
-    });
-
-    return NextResponse.json({
+      return NextResponse.json({
         ok: true,
-        mode: "single-org",
-        orgId,
+        mode: "multi-org",
+        processedOrgs,
         requestId,
         durationMs,
         scheduling,
         totals: {
-          claimed: result.processed,
-          succeeded: result.succeeded,
-          failed: result.failed,
-          requeued: result.requeued,
+          claimed: totalClaimed,
+          succeeded: totalSucceeded,
+          failed: totalFailed,
+          requeued: totalRequeued,
         },
       });
-    }
-
-    const jobs = await prisma.backgroundJob.findMany({
-      where: { status: "QUEUED", runAt: { lte: now } },
-      select: { organizationId: true },
-      orderBy: { runAt: "asc" },
-      take: 500,
-    });
-    const seen = new Set<string>();
-    const orgIds: string[] = [];
-    for (const j of jobs) {
-      if (!seen.has(j.organizationId)) {
-        seen.add(j.organizationId);
-        orgIds.push(j.organizationId);
+    } catch (e) {
+      const err = wrapUnknownError(e);
+      const errMsg = err.message.length > 500 ? err.message.slice(0, 500) + "…" : err.message;
+      try {
+        await prisma.cronRun.update({
+          where: { id: cronRun.id },
+          data: { finishedAt: new Date(), status: "FAILED", error: errMsg },
+        });
+      } catch {
+        // best-effort; continue
       }
-      if (orgIds.length >= MAX_ORGS_TO_SCAN) break;
-    }
-    let processedOrgs = 0;
-    let totalClaimed = 0;
-    let totalSucceeded = 0;
-    let totalFailed = 0;
-    let totalRequeued = 0;
-
-    for (const oid of orgIds) {
-      if (totalClaimed >= limit) break;
-
-      const result = await runQueuedJobs({
-        organizationId: oid,
-        limit: perOrg,
-        lockedBy,
+      const durationMs = Date.now() - startTime;
+      log.error("cron.failed", "Cron run failed", {
+        requestId,
         cronRunId: cronRun.id,
+        durationMs,
+        err: e,
       });
-
-      processedOrgs++;
-      totalClaimed += result.processed;
-      totalSucceeded += result.succeeded;
-      totalFailed += result.failed;
-      totalRequeued += result.requeued;
-
-      if (totalClaimed >= limit) break;
+      return NextResponse.json(
+        { ok: false, requestId, durationMs },
+        { status: 500 }
+      );
     }
-
-    await runJobRunRetention(orgIds);
-    await runCronRunRetention(orgIds);
-
-    const durationMs = Date.now() - startTime;
-    await prisma.cronRun.update({
-      where: { id: cronRun.id },
-      data: { finishedAt: new Date(), status: "SUCCEEDED", error: null },
-    });
-    log.info("cron.done", "Cron run finished", {
-      requestId,
-      cronRunId: cronRun.id,
-      durationMs,
-      meta: {
-        mode: "multi-org",
-        processedOrgs,
-        jobsProcessed: totalClaimed,
-        jobsSkipped: 0,
-        jobsFailed: totalFailed,
-        succeeded: totalSucceeded,
-        requeued: totalRequeued,
-      },
-    });
-
-    return NextResponse.json({
-      ok: true,
-      mode: "multi-org",
-      processedOrgs,
-      requestId,
-      durationMs,
-      scheduling,
-      totals: {
-        claimed: totalClaimed,
-        succeeded: totalSucceeded,
-        failed: totalFailed,
-        requeued: totalRequeued,
-      },
-    });
-  } catch (e) {
-    const err = wrapUnknownError(e);
-    const errMsg = err.message.length > 500 ? err.message.slice(0, 500) + "…" : err.message;
-    try {
-      await prisma.cronRun.update({
-        where: { id: cronRun.id },
-        data: { finishedAt: new Date(), status: "FAILED", error: errMsg },
-      });
-    } catch {
-      // best-effort; continue
-    }
-    const durationMs = Date.now() - startTime;
-    log.error("cron.failed", "Cron run failed", {
-      requestId,
-      cronRunId: cronRun.id,
-      durationMs,
-      err: e,
-    });
-    return NextResponse.json(
-      { ok: false, requestId, durationMs },
-      { status: 500 }
-    );
-  }
   } finally {
     if (acquired) {
       try {
