@@ -6,7 +6,8 @@
  */
 import { prisma } from "@/lib/db";
 import { log } from "@/lib/observability/logger";
-import { wrapUnknownError, AppError } from "@/lib/errors";
+import { getDevSimulationJobType } from "@/lib/env";
+import { JobError, wrapUnknownError } from "@/lib/errors";
 import { executeGenerateActionsForArticle } from "@/lib/domain/generateActions";
 import { executeIngestTopic } from "@/lib/domain/ingestTopic";
 import { executeSummarizeArticle } from "@/lib/domain/summarize";
@@ -58,9 +59,16 @@ async function pruneOldRuns(organizationId: string): Promise<void> {
       await prisma.backgroundJobRun.deleteMany({
         where: { id: { in: runs.map((r) => r.id) } },
       });
+      log.info("backgroundjobrun.retention.cleaned", "BackgroundJobRun retention cleanup", {
+        organizationId,
+        meta: { deleted: runs.length },
+      });
     }
-  } catch {
-    // best-effort; ignore
+  } catch (err) {
+    log.warn("backgroundjobrun.retention.failed", "BackgroundJobRun retention failed", {
+      organizationId,
+      meta: { error: err instanceof Error ? err.message : String(err) },
+    });
   }
 }
 
@@ -144,7 +152,18 @@ export async function runQueuedJobs(
       cronRunId,
     });
 
+    let ingestionResult: { createdArticlesCount: number; dedupedArticlesCount: number } | null = null;
+
     try {
+      const simulate = getDevSimulationJobType();
+      if (simulate && simulate === job.type) {
+        throw JobError("Simulated job failure", {
+          code: "SIMULATED_FAILURE",
+          retryable: false,
+          meta: { simulated: true },
+        });
+      }
+
       switch (job.type) {
         case "SUMMARIZE_ARTICLE": {
           const { articleId } = parseJobPayload<{ articleId: string }>(
@@ -167,7 +186,7 @@ export async function runQueuedJobs(
             job.type,
             job.payloadJson
           );
-          await executeIngestTopic(organizationId, topicId);
+          ingestionResult = await executeIngestTopic(organizationId, topicId);
           break;
         }
         case "NOTIFY": {
@@ -281,8 +300,15 @@ export async function runQueuedJobs(
         attempt: attemptNumber,
         durationMs,
         cronRunId,
+        ...(ingestionResult !== null
+          ? {
+              meta: {
+                createdArticlesCount: ingestionResult.createdArticlesCount,
+                dedupedArticlesCount: ingestionResult.dedupedArticlesCount,
+              },
+            }
+          : {}),
       });
-      pruneOldRuns(organizationId).catch(() => {});
       succeeded++;
     } catch (rawErr) {
       const err = wrapUnknownError(rawErr);
@@ -402,11 +428,13 @@ export async function runQueuedJobs(
           },
         });
       }
-      pruneOldRuns(organizationId).catch(() => {});
       failed++;
       if (willRetry) requeued++;
     }
   }
+
+  // Run BackgroundJobRun retention once per invocation (best-effort).
+  pruneOldRuns(organizationId).catch(() => {});
 
   return {
     processed: succeeded + failed,
@@ -435,12 +463,52 @@ export async function runJobRunRetention(
       },
     });
     if (result.count > 0) {
-      console.log("jobrun.retention.cleaned", { count: result.count });
+      log.info("jobrun.retention.cleaned", "JobRun retention cleanup", {
+        meta: { deleted: result.count, cutoff: cutoff.toISOString(), orgCount: organizationIds.length },
+      });
     }
     return { deleted: result.count };
   } catch (err) {
-    console.warn("jobrun.retention failed", {
-      error: err instanceof Error ? err.message : String(err),
+    log.warn("jobrun.retention.failed", "JobRun retention failed", {
+      meta: {
+        deleted: 0,
+        cutoff: cutoff.toISOString(),
+        orgCount: organizationIds.length,
+        error: err instanceof Error ? err.message : String(err),
+      },
+    });
+    return { deleted: 0 };
+  }
+}
+
+const CRONRUN_RETENTION_DAYS = 30;
+
+/**
+ * Delete CronRun rows older than 30 days. Safe to call after runJobRunRetention.
+ * CronRun has no organizationId; orgIds is for logging consistency.
+ */
+export async function runCronRunRetention(
+  orgIds: string[]
+): Promise<{ deleted: number }> {
+  const cutoff = new Date(Date.now() - CRONRUN_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  try {
+    const result = await prisma.cronRun.deleteMany({
+      where: { createdAt: { lt: cutoff } },
+    });
+    if (result.count > 0) {
+      log.info("cronrun.retention.cleaned", "CronRun retention cleanup", {
+        meta: { deleted: result.count, cutoff: cutoff.toISOString(), orgCount: orgIds.length },
+      });
+    }
+    return { deleted: result.count };
+  } catch (err) {
+    log.warn("cronrun.retention.failed", "CronRun retention failed", {
+      meta: {
+        deleted: 0,
+        cutoff: cutoff.toISOString(),
+        orgCount: orgIds.length,
+        error: err instanceof Error ? err.message : String(err),
+      },
     });
     return { deleted: 0 };
   }
