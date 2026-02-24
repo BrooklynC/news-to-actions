@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { log } from "@/lib/observability/logger";
 import { wrapUnknownError } from "@/lib/errors";
 import { prisma } from "@/lib/db";
-import { runCronRunRetention, runJobRunRetention, runQueuedJobs } from "@/lib/jobs/runner";
+import { runCronRunRetention, runQueuedJobs } from "@/lib/jobs/runner";
 import { enqueueDueTopicIngestion } from "@/lib/scheduling/ingestion";
 
 const GLOBAL_LIMIT_CAP = 50;
@@ -196,7 +196,6 @@ export async function GET(request: NextRequest) {
           cronRunId: cronRun.id,
         });
 
-        await runJobRunRetention([orgId]);
         await runCronRunRetention([orgId]);
 
         const durationMs = Date.now() - startTime;
@@ -275,7 +274,6 @@ export async function GET(request: NextRequest) {
         if (totalClaimed >= limit) break;
       }
 
-      await runJobRunRetention(orgIds);
       await runCronRunRetention(orgIds);
 
       const durationMs = Date.now() - startTime;
