@@ -2,7 +2,13 @@ import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { formatRelativeTime } from "@/lib/time";
-import { getJobMetrics, getObservabilitySnapshot, listDeadJobs, requeueDeadJob } from "./actions";
+import {
+  getJobMetrics,
+  getObservabilitySnapshot,
+  getQueueBacklogSummary,
+  listDeadJobs,
+  requeueDeadJob,
+} from "./actions";
 import { runMyOrgJobs } from "../actions";
 
 function formatDuration(ms: number | null): string {
@@ -29,10 +35,11 @@ function formatPercent(rate: number | null): string {
 }
 
 export default async function ObservabilityPage() {
-  const [snapshot, deadJobs, jobMetrics] = await Promise.all([
+  const [snapshot, deadJobs, jobMetrics, backlog] = await Promise.all([
     getObservabilitySnapshot(),
     listDeadJobs(),
     getJobMetrics(),
+    getQueueBacklogSummary(),
   ]);
   const {
     failureCount24h,
@@ -274,6 +281,94 @@ export default async function ObservabilityPage() {
           </div>
         </Card>
       )}
+
+      {/* Queue backlog */}
+      <Card className="overflow-hidden">
+        <h3 className="border-b border-zinc-200 px-4 py-3 text-sm font-medium text-zinc-900 dark:border-zinc-700 dark:text-zinc-100">
+          Queue backlog
+          {backlog.dueCount > 0 && (
+            <span className="ml-2 rounded-full bg-zinc-200 px-2 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-600 dark:text-zinc-200">
+              {backlog.dueCount} due
+            </span>
+          )}
+        </h3>
+        {backlog.dueCount === 0 ? (
+          <div className="p-6 text-center">
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              No due queued jobs.
+            </p>
+          </div>
+        ) : (
+          <div className="p-4">
+            {backlog.dueByType.length > 0 && (
+              <div className="mb-4">
+                <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  By type
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                  {backlog.dueByType.map(({ type, count }) => (
+                    <span
+                      key={type}
+                      className="inline-flex items-center rounded-full bg-zinc-200 px-2.5 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-600 dark:text-zinc-200"
+                    >
+                      {type.replace(/_/g, " ")} · {count}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {backlog.oldestDue.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[400px] text-sm">
+                  <thead>
+                    <tr className="border-b border-zinc-200 bg-zinc-50/80 dark:border-zinc-700 dark:bg-zinc-800/50">
+                      <th className="px-4 py-2 text-left font-medium text-zinc-700 dark:text-zinc-300">
+                        Type
+                      </th>
+                      <th className="px-4 py-2 text-left font-medium text-zinc-700 dark:text-zinc-300">
+                        Run at
+                      </th>
+                      <th className="px-4 py-2 text-left font-medium text-zinc-700 dark:text-zinc-300">
+                        Attempts
+                      </th>
+                      <th className="px-4 py-2 text-left font-medium text-zinc-700 dark:text-zinc-300">
+                        Last error
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {backlog.oldestDue.map((j) => (
+                      <tr
+                        key={j.id}
+                        className="border-b border-zinc-100 last:border-0 dark:border-zinc-800"
+                      >
+                        <td className="max-w-[140px] truncate px-4 py-2 font-medium text-zinc-900 dark:text-zinc-100">
+                          {j.type.replace(/_/g, " ")}
+                        </td>
+                        <td
+                          className="max-w-[80px] truncate px-4 py-2 text-zinc-600 dark:text-zinc-400"
+                          title={j.runAt.toISOString()}
+                        >
+                          {formatRelativeTime(j.runAt)}
+                        </td>
+                        <td className="px-4 py-2 text-zinc-600 dark:text-zinc-400">
+                          {j.attempts} / {j.maxAttempts}
+                        </td>
+                        <td
+                          className="max-w-[200px] truncate px-4 py-2 text-zinc-600 dark:text-zinc-400"
+                          title={j.lastError ?? undefined}
+                        >
+                          {truncateError(j.lastError)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
 
       {/* Dead letters */}
       <Card className="overflow-hidden">

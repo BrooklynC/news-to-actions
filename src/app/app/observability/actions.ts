@@ -81,6 +81,85 @@ export async function listDeadJobs(): Promise<DeadJob[]> {
   }));
 }
 
+export type QueueBacklogItem = {
+  id: string;
+  type: string;
+  runAt: Date;
+  attempts: number;
+  maxAttempts: number;
+  lastError: string | null;
+  updatedAt: Date;
+};
+
+export type QueueBacklogSummary = {
+  dueCount: number;
+  dueByType: Array<{ type: string; count: number }>;
+  oldestDue: QueueBacklogItem[];
+};
+
+export async function getQueueBacklogSummary(
+  options?: { oldestLimit?: number; typeLimit?: number }
+): Promise<QueueBacklogSummary> {
+  const orgId = await getOrgId();
+  if (!orgId) {
+    return { dueCount: 0, dueByType: [], oldestDue: [] };
+  }
+
+  const now = new Date();
+  const oldestLimit = options?.oldestLimit ?? 10;
+  const typeLimit = options?.typeLimit ?? 5;
+
+  const where = {
+    organizationId: orgId,
+    status: "QUEUED" as const,
+    runAt: { lte: now },
+  };
+
+  const [dueCount, grouped, oldestJobs] = await Promise.all([
+    prisma.backgroundJob.count({ where }),
+    prisma.backgroundJob.groupBy({
+      by: ["type"],
+      where,
+      _count: { id: true },
+    }),
+    prisma.backgroundJob.findMany({
+      where,
+      orderBy: { runAt: "asc" },
+      take: oldestLimit,
+      select: {
+        id: true,
+        type: true,
+        runAt: true,
+        attempts: true,
+        maxAttempts: true,
+        lastError: true,
+        updatedAt: true,
+      },
+    }),
+  ]);
+
+  const dueByType = grouped
+    .map((g) => ({ type: g.type, count: g._count.id }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, typeLimit);
+
+  const oldestDue = oldestJobs.map((j) => ({
+    id: j.id,
+    type: j.type,
+    runAt: j.runAt,
+    attempts: j.attempts,
+    maxAttempts: j.maxAttempts,
+    lastError: j.lastError,
+    updatedAt: j.updatedAt,
+  }));
+
+  return {
+    dueCount,
+    dueByType,
+    oldestDue,
+  };
+}
+
 export async function requeueDeadJob(formData: FormData) {
   const { requireOrgAndUser } = await import("@/lib/auth");
   const { redirect } = await import("next/navigation");
