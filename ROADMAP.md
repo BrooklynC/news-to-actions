@@ -10,6 +10,18 @@ Last Production Deploy:
 ---
 
 # ROADMAP.md (CANONICAL) — News Actions
+
+## EXECUTION STATE
+
+Active Phase: 3.5
+Active Item: Next unchecked item after Retention Enforcer (Phase 3.5)
+Last Verified Milestone: Retention Enforcer deterministic local verification
+Last Schema Change: Added RETENTION_ENFORCER to JobType enum
+Last Migration: 20260224180000_add_retention_enforcer_jobtype
+Last Production Deploy: None since retention verification
+
+---
+
 Updated Feb 24, 2026
 
 ## Phase 0 — Product UI Foundation (Confirmed via Routes)
