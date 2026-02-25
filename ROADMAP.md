@@ -1,3 +1,14 @@
+# EXECUTION STATE
+
+Active Phase:
+Active Item:
+Last Verified Milestone:
+Last Schema Change:
+Last Migration:
+Last Production Deploy:
+
+---
+
 # ROADMAP.md (CANONICAL) — News Actions
 Updated Feb 24, 2026
 
