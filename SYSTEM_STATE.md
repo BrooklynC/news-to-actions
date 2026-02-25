@@ -55,6 +55,7 @@ When working via ChatGPT threads:
 * Do not commit debug scripts.
 * Roadmap Source of Truth: Any recommended or planned work must exist as an explicit checklist item in ROADMAP.md. If a new task is discovered during discussion, it must be added to ROADMAP.md (via a Cursor prompt) before it is referenced as a "next step." Avoid mentioning out-of-roadmap tasks to prevent confusion and thread drift.
 * All terminal instructions must be provided as a single copyable command only, automatically including a macOS `| pbcopy` variant. No explanatory text may appear before or after the command. Explanations must be requested explicitly by the user.
+* Every terminal command or Cursor prompt must be preceded by one short sentence explaining its purpose, so the user understands what the action is intended to achieve.
 
 ## Minimal New Thread Seed Template
 
@@ -538,6 +539,27 @@ Operational visibility: COMPLETE (org-scoped observability in UI)
 - The ep-snowy-sunset endpoint returned "requested endpoint could not be found" and is not currently valid.
 - DATABASE_URL must reference the active endpoint for migrations and cron processing.
 
+### 2026-02-25 — Retention Enforcer Verification (Local Deterministic Proof)
+
+- RETENTION_ENFORCER job executed via /api/cron/run-jobs (single-org mode).
+- BackgroundJob created with idempotencyKey pattern: retention-enforcer:{orgId}:{YYYY-MM-DD}.
+- BackgroundJobRun recorded:
+  - jobType: RETENTION_ENFORCER
+  - status: SUCCEEDED
+  - attemptNumber: 1
+  - durationMs: 38
+- Payload confirmed:
+  - asOfIso present
+  - dryRun: true
+- Scope confirmed org-isolated (organizationId attached to job + run).
+- Eligible tables enforced:
+  - BackgroundJobRun (30d)
+  - Notification (30d)
+  - UsageEvent (90d)
+- Explicitly excluded:
+  - CronRun (global retention handled separately)
+  - Core Business Records (Article, ActionItem, BackgroundJob, JobRun)
+
 ---
 
 # Phase 3 — Data Governance & Integrity
@@ -588,6 +610,10 @@ Includes:
 - UsageEvent
 - CronRun
 
+Note:
+- CronRun is global operational telemetry and does not contain organizationId.
+- CronRun retention is executed globally (not per-org) and is not part of the per-org retention-enforcer job.
+
 Retention Windows (System-Level Defaults):
 
 - BackgroundJobRun → 30 days
@@ -613,7 +639,9 @@ Rationale:
 - Predictable storage growth
 - Equal across org sizes
 
-Retention enforcement will be implemented via a future dedicated background job:
+Retention enforcement for org-scoped operational logs will be implemented via a future dedicated background job (retention-enforcer).
+- CronRun retention remains a global cleanup step executed separately from the per-org retention-enforcer.
+
 - Name: retention-enforcer
 - Runs daily
 - Org-isolated

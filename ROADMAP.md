@@ -56,7 +56,7 @@ Updated Feb 24, 2026
 - [x] Exponential backoff (base 30s, cap 15m, jitter ±20%)
 - [x] Dead-letter handling (DEAD after attempts ≥ maxAttempts)
 - [x] NOTIFY job with DB-level dedupe constraint
-- [x] JobRun metrics + retention (30 days)
+- [x] JobRun metrics (Core Business Record; no auto-retention per Hybrid Data Permanence Model)
 - [x] BackgroundJobRun metrics + retention cap (2000/org)
 - [x] Cron overlap guard via CronLock (unique + TTL)
 - [x] Cron auth enforcement (401 without secret)
@@ -183,7 +183,8 @@ Phase 3 — Governance Definition Complete (Policy Defined; No Implementation Ye
 
 ## Phase 3.5 — Governance Implementation Hardening (Build What Phase 3 Defined)
 
-- [ ] Implement retention-enforcer job (daily; org-isolated; idempotent; hard-delete operational logs per retention windows; dry-run mode)
+- [x] Implement retention-enforcer job (daily; org-isolated; idempotent; hard-delete operational logs per retention windows; dry-run mode)
+- [ ] Schema: extend JobType enum to include RETENTION_ENFORCER (required for retention-enforcer job dispatch; Prisma migration required)
 - [ ] Implement org-level export (deterministic; complete; org-isolated; timestamped; structured output)
 - [ ] Implement org-level delete (explicit owner confirmation + secondary confirmation; irreversible hard delete; pre-delete integrity scan; row-count plan; structured audit logs)
 - [ ] Implement integrity validation tooling for destructive operations (detect cross-org references; orphan prevention; fail-safe behavior)
