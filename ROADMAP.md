@@ -1,11 +1,11 @@
 # EXECUTION STATE
 
-Active Phase:
-Active Item:
-Last Verified Milestone:
-Last Schema Change:
-Last Migration:
-Last Production Deploy:
+Active Phase: 3.5
+Active Item: Next unchecked after Retention Enforcer
+Last Verified Milestone: Retention Enforcer deterministic local verification
+Last Schema Change: Added RETENTION_ENFORCER to JobType enum
+Last Migration: 20260224180000_add_retention_enforcer_jobtype
+Last Production Deploy: None since retention verification
 
 ---
 
