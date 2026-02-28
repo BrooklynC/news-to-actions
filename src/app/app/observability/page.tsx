@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Prisma } from "@prisma/client";
+import { JobType } from "@prisma/client";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { formatRelativeTime } from "@/lib/time";
@@ -37,7 +37,7 @@ function formatPercent(rate: number | null): string {
 }
 
 export default async function ObservabilityPage() {
-  console.log("PRISMA_ENUM_VALUES_RUNTIME:", Prisma.JobType);
+  console.log("PRISMA_ENUM_VALUES_RUNTIME:", JobType);
   const [snapshot, deadJobs, jobMetrics, backlog, deadSummary] =
     await Promise.all([
       getObservabilitySnapshot(),
