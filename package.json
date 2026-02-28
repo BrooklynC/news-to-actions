@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "check:jobtypes": "node -e \"const { JobType } = require('@prisma/client'); const fs=require('fs'); const prisma=Object.values(JobType).sort(); const txt=fs.readFileSync('src/lib/jobs/jobTypes.ts','utf8'); const local=[...new Set([...txt.matchAll(/:\\\\s*\\\\\\\"([A-Z0-9_]+)\\\\\\\"/g)].map(x=>x[1]))].sort(); const missing=prisma.filter(x=>!local.includes(x)); const extra=local.filter(x=>!prisma.includes(x)); if(missing.length||extra.length){ console.error(JSON.stringify({missing,extra},null,2)); process.exit(1);} console.log('ok');\"",
     "dev": "next dev",
-    "build": "prisma migrate deploy --schema=prisma/schema.prisma && next build",
+    "build": "prisma generate && prisma migrate deploy --schema=prisma/schema.prisma && next build",
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate --schema=prisma/schema.prisma",
