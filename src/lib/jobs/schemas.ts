@@ -23,6 +23,11 @@ export const RetentionEnforcerPayloadSchema = z.object({
   dryRun: z.boolean().optional(),
 });
 
+export const ExportOrgDataPayloadSchema = z.object({
+  requestId: z.string().min(1),
+  asOfIso: z.string().optional(),
+});
+
 export type IngestTopicPayload = z.infer<typeof IngestTopicPayloadSchema>;
 export type SummarizeArticlePayload = z.infer<typeof SummarizeArticlePayloadSchema>;
 export type GenerateActionsForArticlePayload = z.infer<
@@ -30,6 +35,7 @@ export type GenerateActionsForArticlePayload = z.infer<
 >;
 export type NotifyPayload = z.infer<typeof NotifyPayloadSchema>;
 export type RetentionEnforcerPayload = z.infer<typeof RetentionEnforcerPayloadSchema>;
+export type ExportOrgDataPayload = z.infer<typeof ExportOrgDataPayloadSchema>;
 
 const payloadSchemas: Record<string, z.ZodSchema> = {
   INGEST_TOPIC: IngestTopicPayloadSchema,
@@ -37,6 +43,7 @@ const payloadSchemas: Record<string, z.ZodSchema> = {
   GENERATE_ACTIONS_FOR_ARTICLE: GenerateActionsForArticlePayloadSchema,
   NOTIFY: NotifyPayloadSchema,
   RETENTION_ENFORCER: RetentionEnforcerPayloadSchema,
+  EXPORT_ORG_DATA: ExportOrgDataPayloadSchema,
 };
 
 export function parseJobPayload<T>(

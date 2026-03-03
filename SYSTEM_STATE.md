@@ -56,6 +56,7 @@ When working via ChatGPT threads:
 * Roadmap Source of Truth: Any recommended or planned work must exist as an explicit checklist item in ROADMAP.md. If a new task is discovered during discussion, it must be added to ROADMAP.md (via a Cursor prompt) before it is referenced as a "next step." Avoid mentioning out-of-roadmap tasks to prevent confusion and thread drift.
 * All terminal instructions must be provided as a single copyable command only, automatically including a macOS `| pbcopy` variant. No explanatory text may appear before or after the command. Explanations must be requested explicitly by the user.
 * Every terminal command or Cursor prompt must be preceded by one short sentence explaining its purpose, so the user understands what the action is intended to achieve.
+* New Thread Bootstrap (Preferred): Attach ROADMAP.md and SYSTEM_STATE.md (and THREAD_LOG.md if present) to each new thread. When files are attached, treat them as authoritative and do NOT require pasting their full contents into the seed. If file attachments are unavailable or incomplete, fall back to pasting full file contents.
 
 ## Minimal New Thread Seed Template
 
@@ -65,24 +66,49 @@ Use the following template when starting a new ChatGPT thread:
 
 NEW THREAD — News Actions
 
-Canonical docs:
-- SYSTEM_STATE.md (current implementation + verification + runbooks)
-- ROADMAP.md (phase plan + checkbox state)
+Canonical Documents (Authoritative)
 
-Working rules:
-- Decision points first
-- Then ONE Cursor prompt or ONE terminal command at a time
-- If asking me to paste output, do NOT include next steps after that
+The following files are attached in full and are binding:
+- ROADMAP.md
+- SYSTEM_STATE.md
+- THREAD_LOG.md (if present)
 
-Goal for this thread:
-<Insert objective here>
+Assume:
+- These documents are complete and authoritative.
+- No reinterpretation of checklist wording is allowed.
+- No roadmap items may be invented, reworded, or implied without a Cursor prompt updating ROADMAP.md.
+- If a recommended task is not present on ROADMAP.md, it must be added via Cursor before discussion continues.
+- SYSTEM_STATE operating rules are permanent unless explicitly amended via Cursor.
+- THREAD_LOG is append-only; never edit prior entries (only append a new "Thread N — YYYY-MM-DD" entry).
 
-Constraints (optional):
-<Insert constraints here>
+Execution Rules
+- No schema changes without an explicit roadmap item.
+- No new jobs without a roadmap item.
+- No production-impacting changes without checklist reference.
+- All recommended changes must be provided as single copyable Cursor prompts or single copyable terminal commands (include a macOS `| pbcopy` variant by default).
+- Every command or prompt must be preceded by one short sentence explaining its purpose.
+- No silent failures permitted.
+- Org isolation invariants remain enforced.
+- Multi-tenant guarantees must not regress.
+- Structured logging guarantees remain mandatory.
+- Retention windows must follow SYSTEM_STATE definitions exactly.
+- Enforcement must be idempotent.
+- Hard delete operational logs only.
+- Must not cascade into Core Business Records.
+- Dry-run mode required before activation.
 
----
+Thread Bootstrap
+Thread #:
+Today's Date (America/New_York):
 
-This template avoids rebuilding architecture context in every thread.
+Changes Since Last Thread (bullet list; required):
+-
+
+Current Goal
+Goal:
+Constraints: follow all Execution Rules above.
+
+Begin analysis only after confirming you can see the full attached ROADMAP.md and SYSTEM_STATE.md files in this thread. If they are not visible, request that they be pasted in full.
 
 ---
 
@@ -559,6 +585,13 @@ Operational visibility: COMPLETE (org-scoped observability in UI)
 - Explicitly excluded:
   - CronRun (global retention handled separately)
   - Core Business Records (Article, ActionItem, BackgroundJob, JobRun)
+
+### 2026-02-25 — EXPORT_ORG_DATA JobType Schema Extension — VERIFIED (Local)
+
+- Added EXPORT_ORG_DATA to JobType enum (prisma/schema.prisma).
+- Migration created + applied: 20260225155148_add_export_org_data_jobtype.
+- Verified via querying _prisma_migrations (latest includes 20260225155148_add_export_org_data_jobtype).
+- Verified schema contains EXPORT_ORG_DATA in JobType.
 
 ---
 

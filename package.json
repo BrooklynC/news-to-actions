@@ -17,6 +17,8 @@
     "prisma:migrate:pg:deploy": "cross-env PRISMA_MIGRATIONS_PATH=prisma_pg prisma migrate deploy --schema=prisma_pg/schema.prisma"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1001.0",
+    "@aws-sdk/s3-request-presigner": "^3.1001.0",
     "@clerk/nextjs": "^6.38.1",
     "@prisma/client": "6.19.2",
     "inngest": "^3.52.3",
@@ -32,10 +34,10 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "cross-env": "^7.0.3",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
-    "typescript": "^5",
-    "cross-env": "^7.0.3"
+    "typescript": "^5"
   }
 }

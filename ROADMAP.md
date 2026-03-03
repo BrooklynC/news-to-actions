@@ -1,8 +1,8 @@
 # EXECUTION STATE
 
 Active Phase: 3.5
-Active Item: Next unchecked after Retention Enforcer
-Last Verified Milestone: Retention Enforcer deterministic local verification
+Active Item: Implement object storage export artifact backend (S3-compatible; signed URLs; lifecycle rules)
+Last Verified Milestone: EXPORT_ORG_DATA deterministic local verification (org isolation, artifact creation, idempotency proven)
 Last Schema Change: Added RETENTION_ENFORCER to JobType enum
 Last Migration: 20260224180000_add_retention_enforcer_jobtype
 Last Production Deploy: None since retention verification
@@ -14,8 +14,8 @@ Last Production Deploy: None since retention verification
 ## EXECUTION STATE
 
 Active Phase: 3.5
-Active Item: Next unchecked item after Retention Enforcer (Phase 3.5)
-Last Verified Milestone: Retention Enforcer deterministic local verification
+Active Item: Implement object storage export artifact backend (S3-compatible; signed URLs; lifecycle rules)
+Last Verified Milestone: EXPORT_ORG_DATA deterministic local verification (org isolation, artifact creation, idempotency proven)
 Last Schema Change: Added RETENTION_ENFORCER to JobType enum
 Last Migration: 20260224180000_add_retention_enforcer_jobtype
 Last Production Deploy: None since retention verification
@@ -207,7 +207,11 @@ Phase 3 — Governance Definition Complete (Policy Defined; No Implementation Ye
 ## Phase 3.5 — Governance Implementation Hardening (Build What Phase 3 Defined)
 
 - [x] Implement retention-enforcer job (daily; org-isolated; idempotent; hard-delete operational logs per retention windows; dry-run mode)
-- [ ] Schema: extend JobType enum to include RETENTION_ENFORCER (required for retention-enforcer job dispatch; Prisma migration required)
+- [x] Schema: extend JobType enum to include RETENTION_ENFORCER (required for retention-enforcer job dispatch; Prisma migration required)
+- [x] Schema: extend JobType enum to include EXPORT_ORG_DATA (required for org export job dispatch; Prisma migration required)
+- [x] Guardrail: prevent JobType drift between Prisma JobType enum and src/lib/jobs/jobTypes.ts (build-time check; fail fast)
+- [x] Implement EXPORT_ORG_DATA background job (org-isolated; idempotent; produces deterministic export artifact; structured logs; retries + DEAD behavior)
+- [ ] Implement object storage export artifact backend (S3-compatible; signed URLs; lifecycle rules)
 - [ ] Implement org-level export (deterministic; complete; org-isolated; timestamped; structured output)
 - [ ] Implement org-level delete (explicit owner confirmation + secondary confirmation; irreversible hard delete; pre-delete integrity scan; row-count plan; structured audit logs)
 - [ ] Implement integrity validation tooling for destructive operations (detect cross-org references; orphan prevention; fail-safe behavior)

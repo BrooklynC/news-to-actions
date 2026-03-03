@@ -48,6 +48,7 @@ enum JobType {
   NOTIFY
   RETENTION_ENFORCER
   RUN_RECIPE
+  EXPORT_ORG_DATA
 }
 
 enum JobStatus {

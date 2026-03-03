@@ -1,0 +1,4 @@
+-- PRISMA MIGRATION PLACEHOLDER
+-- This migration existed in the target database but the local folder was missing.
+-- It has been recreated locally to reconcile migration history.
+-- No-op by design.

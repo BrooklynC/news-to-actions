@@ -64,3 +64,16 @@ export function getRetentionEnforcerBatchLimit(): number {
   if (Number.isNaN(n) || n < 1) return RETENTION_ENFORCER_BATCH_LIMIT_DEFAULT;
   return n;
 }
+
+const EXPORT_STORAGE_BASE_DIR_DEFAULT = ".export-artifacts";
+
+export function getExportStorageBaseDir(): string {
+  if (!devEnvLoaded && process.env.NODE_ENV !== "production") {
+    dotenv.config({ path: ".env" });
+    dotenv.config({ path: ".env.local" });
+    devEnvLoaded = true;
+  }
+  const v = process.env.EXPORT_STORAGE_BASE_DIR;
+  const trimmed = typeof v === "string" ? v.trim() : "";
+  return trimmed || EXPORT_STORAGE_BASE_DIR_DEFAULT;
+}

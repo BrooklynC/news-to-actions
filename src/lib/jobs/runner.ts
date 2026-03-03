@@ -7,7 +7,7 @@
 import { prisma } from "@/lib/db";
 import { log } from "@/lib/observability/logger";
 import { getDevSimulationJobType } from "@/lib/env";
-import { JobError, wrapUnknownError } from "@/lib/errors";
+import { JobError, ValidationError, wrapUnknownError } from "@/lib/errors";
 import { executeGenerateActionsForArticle } from "@/lib/domain/generateActions";
 import { executeIngestTopic } from "@/lib/domain/ingestTopic";
 import { executeSummarizeArticle } from "@/lib/domain/summarize";
@@ -16,6 +16,7 @@ import { parseJobPayload } from "./schemas";
 import { NotifyPayloadSchema } from "./schemas";
 import type { JobType } from "@prisma/client";
 import { retentionEnforcerHandler } from "./handlers/retentionEnforcer";
+import { runExportOrgDataJob } from "./handlers/exportOrgData";
 import {
   getRetentionEnforcerBatchLimit,
   getRetentionEnforcerDryRun,
@@ -247,6 +248,31 @@ export async function runQueuedJobs(
             asOfIso,
             dryRun,
             batchLimit,
+            logger: childLog,
+          });
+          break;
+        }
+        case "EXPORT_ORG_DATA": {
+          const payload = parseJobPayload<{ requestId: string; asOfIso?: string }>(
+            job.type,
+            job.payloadJson
+          );
+          const requestId = typeof payload.requestId === "string" ? payload.requestId.trim() : "";
+          if (!requestId) {
+            throw ValidationError("requestId is required and must be a non-empty string", {
+              code: "EXPORT_ORG_DATA_REQUEST_ID_REQUIRED",
+            });
+          }
+          const childLog = log.child({
+            organizationId,
+            jobId: job.id,
+            jobType: "EXPORT_ORG_DATA",
+            requestId: payload.requestId,
+            ...(cronRunId ? { cronRunId } : {}),
+          });
+          await runExportOrgDataJob({
+            organizationId,
+            payload: { requestId: payload.requestId, asOfIso: payload.asOfIso },
             logger: childLog,
           });
           break;

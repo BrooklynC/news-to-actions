@@ -1,0 +1,95 @@
+# Cursor Rules — News Actions (Prototype Mode)
+
+## Project Context
+- Stack: Next.js App Router, Tailwind, Prisma ORM, Postgres, Clerk auth, Server Actions (no API routes except /api/cron/*)
+- Governance docs: ROADMAP.md and SYSTEM_STATE.md are canonical and authoritative
+- Active Phase: 3.5
+- Active Item: Object storage export artifact backend (S3-compatible; signed URLs; lifecycle rules)
+
+---
+
+## Execution Mode: Build Fast
+
+You are implementing a working prototype. Move fast. Make decisions without asking for clarification.
+
+- **Never ask clarifying questions.** Pick the most reasonable implementation and build it.
+- **Never stop to confirm** before writing or editing files.
+- **Never invent roadmap items.** Only implement tasks that exist as explicit checkboxes in ROADMAP.md.
+- If a task requires a schema change or new job type, only proceed if it has an explicit ROADMAP.md item.
+
+---
+
+## Decision-Making Rules
+
+### When something is ambiguous:
+- Pick the simplest implementation consistent with existing patterns in the codebase.
+- Leave a `// TODO:` comment noting the assumption made, then proceed.
+
+### When you hit a blocker:
+- **Do not stop.** Make the most reasonable assumption given existing code patterns and keep going.
+- Leave a clearly labelled comment in the code at the decision point:
+
+```ts
+// 🚧 ASSUMPTION: [what you assumed and why] — revisit before production
+```
+
+- Also append a note to a file called `CURSOR_ASSUMPTIONS.md` in the project root (create it if it doesn't exist):
+
+```
+## [Task name]
+- Assumption: [what you decided]
+- Why: [brief rationale]
+- Risk: low (prototype)
+- File: [where the assumption lives]
+```
+
+Then continue to the next task.
+
+---
+
+## Invariants — Never Violate These
+
+These are non-negotiable and must be preserved in every change:
+
+1. **Org isolation**: Every DB query that reads or writes must be scoped by `organizationId`. No exceptions.
+2. **Structured logging**: Use `log.error / log.warn / log.info` from `src/lib/observability/logger.ts`. No `console.*` calls.
+   - Always include correlation IDs: `organizationId`, `jobId`, `jobRunId` where applicable.
+3. **No silent failures**: Every failure path must emit a structured log and surface an error.
+4. **Idempotency**: Background jobs must use a stable `idempotencyKey`. `enqueueJob` requires it.
+5. **No cross-org mutation**: Multi-tenant guarantees must never regress.
+6. **No unauthorized schema changes**: Schema changes require an explicit ROADMAP.md item and a Prisma migration.
+7. **Hard delete operational logs only**: Never cascade into Core Business Records (Article, ActionItem, BackgroundJob, JobRun).
+
+---
+
+## UI Decisions
+
+- Use **Tailwind utility classes only** (no custom CSS).
+- Match the existing component patterns and layout conventions already in the codebase.
+- UI decisions are **temporary placeholders** — do not over-invest in polish. The developer will refactor UI separately.
+- Leave a `// UI-TODO:` comment on any UI component you create so it can be found and revised later.
+
+---
+
+## Code Standards
+
+- Follow existing file and folder structure conventions exactly.
+- Use Server Actions for all data mutations (not API routes, except `/api/cron/*`).
+- Prisma: use `updateMany` with org guard for all tenant writes.
+- No test files needed for prototype work unless explicitly requested.
+- No new dependencies without a `// DEPENDENCY-TODO:` comment explaining why it was added.
+
+---
+
+## Roadmap Discipline
+
+- Do not implement anything not present as an unchecked item in ROADMAP.md.
+- Do not mark items as complete in ROADMAP.md — the developer will do this after verification.
+- If you discover a task that should exist on the roadmap but doesn't, output this and stop:
+
+```
+📋 ROADMAP GAP DETECTED
+Missing item: [description]
+Required before: [what depends on it]
+Action needed: Developer must add this to ROADMAP.md before proceeding.
+```
