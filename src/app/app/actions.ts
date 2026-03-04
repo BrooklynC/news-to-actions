@@ -3,9 +3,12 @@
 import { z } from "zod";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import { checkTopicLimit } from "@/lib/guardrails/ingestion";
 import { enqueueJob } from "@/lib/jobs/queue";
+import { generateDeletePlan, executeOrgDelete } from "@/lib/org/orgDelete";
 import { runQueuedJobs } from "@/lib/jobs/runner";
 import { enqueueDueTopicIngestion } from "@/lib/scheduling/ingestion";
+import { requireOrgAndUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { safeAction } from "@/lib/server/safeAction";
 
@@ -43,6 +46,10 @@ export async function createTopicFromForm(formData: FormData) {
   const query = String(formData.get("query") ?? "").trim();
   if (!name || !query)
     redirect(`${ARTICLES}?error=` + encodeURIComponent("name and query are required"));
+
+  const topicLimit = await checkTopicLimit(org.id);
+  if (!topicLimit.ok)
+    redirect(`${ARTICLES}?error=` + encodeURIComponent(topicLimit.message));
 
   try {
     await prisma.topic.create({
@@ -128,6 +135,44 @@ export async function enqueueIngestTopicJob(topicId: string) {
       idempotencyKey: `INGEST_TOPIC:${id}`,
     });
     redirect(`${ARTICLES}?message=` + encodeURIComponent("Ingest job queued."));
+  });
+}
+
+export async function getOrgDeletePlan() {
+  return safeAction(async () => {
+    const org = await getOrgAndRedirect();
+    const { plan, confirmationToken } = await generateDeletePlan(org.id);
+    return { plan, confirmationToken };
+  });
+}
+
+export async function confirmOrgDelete(confirmationToken: string) {
+  return safeAction(async () => {
+    const auth = await requireOrgAndUser();
+    const { verifyOrgDeleteToken } = await import("@/lib/org/orgDelete");
+    const payload = verifyOrgDeleteToken(confirmationToken);
+    const tokenOrgId = payload.organizationId as string | undefined;
+    if (!tokenOrgId || tokenOrgId !== auth.organizationId) {
+      throw new Error("Organization ID mismatch: confirmation token does not match current org.");
+    }
+    await executeOrgDelete(confirmationToken);
+    redirect(`/sign-in?message=` + encodeURIComponent("Organization deleted. Please sign in to another org."));
+  });
+}
+
+export async function requestOrgExport() {
+  return safeAction(async () => {
+    const org = await getOrgAndRedirect();
+    const requestId = crypto.randomUUID();
+    const asOfIso = new Date().toISOString();
+    const idempotencyKey = `export-org:${org.id}:${requestId}`;
+    await enqueueJob({
+      organizationId: org.id,
+      type: "EXPORT_ORG_DATA",
+      payload: { requestId, asOfIso },
+      idempotencyKey,
+    });
+    redirect(`${ARTICLES}?message=` + encodeURIComponent("Org export job queued. Run cron to process."));
   });
 }
 
@@ -266,6 +311,9 @@ export async function seedDevTopic() {
     if (existing) {
       redirect(`${ARTICLES}?banner=` + encodeURIComponent("Dev Topic ready"));
     }
+    const topicLimit = await checkTopicLimit(org.id);
+    if (!topicLimit.ok)
+      redirect(`${ARTICLES}?error=` + encodeURIComponent(topicLimit.message));
     await prisma.topic.create({
       data: {
         organizationId: org.id,

@@ -29,8 +29,6 @@ export type ErrShape = {
   cause?: ErrShape;
 };
 
-const LEVELS: LogLevel[] = ["debug", "info", "warn", "error"];
-
 function isJsonSafe(value: unknown): boolean {
   if (value === null || value === undefined) return true;
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return true;

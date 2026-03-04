@@ -1,10 +1,17 @@
-# Cursor Rules — News Actions (Prototype Mode)
+# Cursor Rules — News Actions
 
 ## Project Context
 - Stack: Next.js App Router, Tailwind, Prisma ORM, Postgres, Clerk auth, Server Actions (no API routes except /api/cron/*)
 - Governance docs: ROADMAP.md and SYSTEM_STATE.md are canonical and authoritative
-- Active Phase: 3.5
-- Active Item: Object storage export artifact backend (S3-compatible; signed URLs; lifecycle rules)
+- Production work checklist: docs/production-work.md
+- Active Phase: 5 (Security & Risk)
+- Active Item: Phase 5 documentation and audit items
+
+## Product Context (Condensed)
+- **What it does:** Multi-tenant B2B app: ingest topics/articles, AI summarization, AI-generated action items, notifications (Slack/email), observability (jobs, cron, DEAD monitoring). Org-scoped everything; cron is secret-gated (/api/cron/*).
+- **Core job types:** INGEST_TOPIC, SUMMARIZE_ARTICLE, GENERATE_ACTIONS_FOR_ARTICLE, NOTIFY, RETENTION_ENFORCER, RUN_RECIPE, EXPORT_ORG_DATA. Queue: QUEUED → PROCESSING → SUCCEEDED | FAILED | DEAD; idempotencyKey required; exponential backoff; DEAD after maxAttempts.
+- **Data model:** Core Business Records (permanent, never auto-purged): Article, ActionItem, BackgroundJob, JobRun. Operational (time-based retention, hard-delete only): BackgroundJobRun, Notification, UsageEvent, CronRun. Org-level export/delete and integrity validation implemented.
+- **Invariants:** See “Invariants — Never Violate These” below; org isolation, structured logging, no silent failures, idempotency, and retention rules are non-negotiable.
 
 ---
 

@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { JobType } from "@prisma/client";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { formatRelativeTime } from "@/lib/time";
+import { SPEND_SPIKE_WARN_USD } from "@/lib/usage/cost";
 import {
+  getAiCostReport,
   getDeadJobsSummary,
   getJobMetrics,
   getObservabilitySnapshot,
@@ -37,14 +38,15 @@ function formatPercent(rate: number | null): string {
 }
 
 export default async function ObservabilityPage() {
-  console.log("PRISMA_ENUM_VALUES_RUNTIME:", JobType);
-  const [snapshot, deadJobs, jobMetrics, backlog, deadSummary] =
+  const [snapshot, deadJobs, jobMetrics, backlog, deadSummary, cost24h, cost7d] =
     await Promise.all([
       getObservabilitySnapshot(),
       listDeadJobs(),
       getJobMetrics(),
       getQueueBacklogSummary(),
       getDeadJobsSummary(),
+      getAiCostReport("24h"),
+      getAiCostReport("7d"),
     ]);
   const {
     failureCount24h,
@@ -87,6 +89,50 @@ export default async function ObservabilityPage() {
           )}
         </div>
       </div>
+
+      {/* AI usage / cost */}
+      {(cost24h ?? cost7d) && (
+        <Card className="overflow-hidden">
+          <h3 className="border-b border-zinc-200 px-4 py-3 text-sm font-medium text-zinc-900 dark:border-zinc-700 dark:text-zinc-100">
+            AI usage & cost
+          </h3>
+          <div className="grid gap-4 p-4 sm:grid-cols-2">
+            {cost24h && (
+              <div>
+                <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                  Last 24h
+                </p>
+                <p className="mt-1 text-sm text-zinc-900 dark:text-zinc-100">
+                  ${cost24h.totalCostUsd.toFixed(4)} · {cost24h.callCount} calls
+                  · {cost24h.totalInputTokens.toLocaleString()} in /{" "}
+                  {cost24h.totalOutputTokens.toLocaleString()} out
+                  {cost24h.totalCostUsd >= SPEND_SPIKE_WARN_USD && (
+                    <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                      Spend spike
+                    </span>
+                  )}
+                </p>
+                <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                  Summarize: ${cost24h.byAction.SUMMARIZE.cost.toFixed(4)} (
+                  {cost24h.byAction.SUMMARIZE.calls}) · Generate actions: $
+                  {cost24h.byAction.GENERATE_ACTIONS.cost.toFixed(4)} (
+                  {cost24h.byAction.GENERATE_ACTIONS.calls})
+                </p>
+              </div>
+            )}
+            {cost7d && (
+              <div>
+                <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                  Last 7 days
+                </p>
+                <p className="mt-1 text-sm text-zinc-900 dark:text-zinc-100">
+                  ${cost7d.totalCostUsd.toFixed(4)} · {cost7d.callCount} calls
+                </p>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
 
       {/* Last cron run */}
       {lastCronRun && (

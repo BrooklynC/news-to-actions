@@ -12,7 +12,8 @@ import {
 } from "@/lib/guardrails/dedupe";
 import { normalizeActionTitle } from "./normalizeActionTitle";
 import { getOpenAIClient } from "@/lib/openai";
-import { checkAndRecordAiUsage } from "@/lib/usage/limits";
+import { log } from "@/lib/observability/logger";
+import { checkAndRecordAiUsage, updateUsageEventTokens } from "@/lib/usage/limits";
 
 function getRecipeGuidance(recipeType: RecipeType): string {
   switch (recipeType) {
@@ -76,6 +77,7 @@ export async function executeGenerateActionsForArticle(
     action: "GENERATE_ACTIONS",
   });
   if (!limit.ok) throw new Error(limit.message);
+  const usageEventId = limit.usageEventId;
 
   const personaList = personas.map((p) => `- ${p.id}: ${p.name}`).join("\n");
   let content = `Article: ${article.title}\nURL: ${article.url}${
@@ -106,13 +108,25 @@ export async function executeGenerateActionsForArticle(
     ) {
       throw new Error("OpenAI quota exceeded. Please check billing.");
     }
-    console.error("OpenAI error:", error);
+    log.error("generate_actions.openai_error", "OpenAI request failed", {
+      organizationId,
+      articleId,
+      err: error,
+    });
     throw new Error("AI request failed. Check server logs.");
   }
 
   const raw = completion.choices[0]?.message?.content ?? "";
   if (!raw.trim())
     throw new Error("AI returned an empty response. Try again.");
+
+  if (usageEventId && completion.usage) {
+    await updateUsageEventTokens(usageEventId, {
+      inputTokens: completion.usage.prompt_tokens ?? 0,
+      outputTokens: completion.usage.completion_tokens ?? 0,
+      model: completion.model ?? "gpt-4o-mini",
+    });
+  }
 
   let parsed: unknown;
   try {

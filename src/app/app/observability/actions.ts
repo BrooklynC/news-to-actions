@@ -3,6 +3,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { log } from "@/lib/observability/logger";
 import { prisma } from "@/lib/db";
+import { getCostReport, type CostReport } from "@/lib/usage/cost";
 
 const INGEST_JOB_TYPE = "INGEST_TOPIC";
 
@@ -37,6 +38,16 @@ async function getOrgId(): Promise<string | null> {
 }
 
 const OBSERVABILITY = "/app/observability";
+
+export async function getAiCostReport(period: "24h" | "7d"): Promise<CostReport | null> {
+  const orgId = await getOrgId();
+  if (!orgId) return null;
+  const since =
+    period === "24h"
+      ? new Date(Date.now() - 24 * 60 * 60 * 1000)
+      : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  return getCostReport(orgId, since);
+}
 
 export type DeadJob = {
   id: string;
@@ -532,7 +543,6 @@ export async function getObservabilitySnapshot(): Promise<ObservabilitySnapshot>
       }),
     ]);
 
-  const topicMap = new Map(topics.map((t) => [t.id, t.name]));
   const lastSuccessByTopic = new Map<string, Date>();
   for (const r of successRuns) {
     try {

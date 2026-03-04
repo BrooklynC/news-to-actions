@@ -2,15 +2,10 @@
  * Domain logic for summarizing an article.
  * Throws on failure; used by both server action (wraps with redirect) and job runner.
  */
-import { ActionItemListSchema } from "@/lib/ai-schemas";
 import { prisma } from "@/lib/db";
-import { enforceCaps } from "@/lib/guardrails/caps";
-import {
-  dedupeByNormalizedText,
-  normalizeActionText,
-} from "@/lib/guardrails/dedupe";
 import { getOpenAIClient } from "@/lib/openai";
-import { checkAndRecordAiUsage } from "@/lib/usage/limits";
+import { log } from "@/lib/observability/logger";
+import { checkAndRecordAiUsage, updateUsageEventTokens } from "@/lib/usage/limits";
 
 export async function executeSummarizeArticle(
   organizationId: string,
@@ -28,6 +23,7 @@ export async function executeSummarizeArticle(
     action: "SUMMARIZE",
   });
   if (!limit.ok) throw new Error(limit.message);
+  const usageEventId = limit.usageEventId;
 
   const content = [article.title, article.url, article.summary]
     .filter(Boolean)
@@ -53,13 +49,25 @@ export async function executeSummarizeArticle(
     ) {
       throw new Error("OpenAI quota exceeded. Please check billing.");
     }
-    console.error("OpenAI error:", error);
+    log.error("summarize.openai_error", "OpenAI request failed", {
+      organizationId,
+      articleId,
+      err: error,
+    });
     throw new Error("AI request failed. Check server logs.");
   }
 
   const raw = completion.choices[0]?.message?.content ?? "";
   if (!raw.trim())
     throw new Error("AI returned an empty response. Try again.");
+
+  if (usageEventId && completion.usage) {
+    await updateUsageEventTokens(usageEventId, {
+      inputTokens: completion.usage.prompt_tokens ?? 0,
+      outputTokens: completion.usage.completion_tokens ?? 0,
+      model: completion.model ?? "gpt-4o-mini",
+    });
+  }
 
   const summary = raw.trim();
   await prisma.article.update({

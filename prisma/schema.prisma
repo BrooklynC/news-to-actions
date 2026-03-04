@@ -9,8 +9,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum ActionStatus {
@@ -319,6 +320,10 @@ model UsageEvent {
   userId         String? // optional, useful later even if org-scoped now
   action         UsageAction
   createdAt      DateTime    @default(now())
+  // Token usage (filled after OpenAI call when available)
+  inputTokens    Int?
+  outputTokens   Int?
+  model          String?
 
   @@index([organizationId, createdAt])
   @@index([organizationId, action, createdAt])

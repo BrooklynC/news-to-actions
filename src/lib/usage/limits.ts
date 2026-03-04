@@ -4,7 +4,7 @@ const PER_MIN_LIMIT = 5;
 const PER_DAY_LIMIT = 100;
 
 export type LimitCheck =
-  | { ok: true }
+  | { ok: true; usageEventId: string }
   | { ok: false; reason: "per_minute" | "per_day"; message: string };
 
 function minutesAgo(n: number): Date {
@@ -58,13 +58,35 @@ export async function checkAndRecordAiUsage(params: {
     };
   }
 
-  await prisma.usageEvent.create({
+  const event = await prisma.usageEvent.create({
     data: {
       organizationId,
       userId: userId ?? null,
       action,
     },
+    select: { id: true },
   });
 
-  return { ok: true };
+  return { ok: true, usageEventId: event.id };
+}
+
+export type TokenUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  model: string;
+};
+
+/** Update a usage event with token counts after the OpenAI call. */
+export async function updateUsageEventTokens(
+  usageEventId: string,
+  data: TokenUsage
+): Promise<void> {
+  await prisma.usageEvent.update({
+    where: { id: usageEventId },
+    data: {
+      inputTokens: data.inputTokens,
+      outputTokens: data.outputTokens,
+      model: data.model,
+    },
+  });
 }

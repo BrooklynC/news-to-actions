@@ -2,7 +2,6 @@ import { Banner } from "@/components/ui/Banner";
 import { Card } from "@/components/ui/Card";
 import { formatRelativeTime } from "@/lib/time";
 import { ClampText } from "@/components/ui/ClampText";
-import { BulletedText } from "@/components/ui/BulletedText";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ArticleSummarizeButton } from "./ArticleSummarizeButton";
 import { ArticleGenerateButton } from "./ArticleGenerateButton";
@@ -14,7 +13,6 @@ import {
 } from "@/app/app/actions";
 import { generateActions, summarizeArticle } from "./actions";
 import { auth, currentUser } from "@clerk/nextjs/server";
-import { redirect } from "next/navigation";
 import { getAuthContext } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { syncDbWithClerk } from "@/lib/sync-clerk";

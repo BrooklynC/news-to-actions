@@ -57,102 +57,113 @@ export async function runExportOrgDataJob(
   try {
     const whereBase = { organizationId, createdAt: { lte: asOfDate } };
 
-    const [articles, actionItems, backgroundJobs, jobRuns, backgroundJobRuns, notifications, usageEvents] =
-      await Promise.all([
-        fetchAllPaged((skip, take) =>
-          prisma.article.findMany({
-            where: whereBase,
-            orderBy: { id: "asc" },
-            skip,
-            take,
-          })
-        ),
-        fetchAllPaged((skip, take) =>
-          prisma.actionItem.findMany({
-            where: whereBase,
-            orderBy: { id: "asc" },
-            skip,
-            take,
-          })
-        ),
-        fetchAllPaged((skip, take) =>
-          prisma.backgroundJob.findMany({
-            where: whereBase,
-            orderBy: { id: "asc" },
-            skip,
-            take,
-          })
-        ),
-        fetchAllPaged((skip, take) =>
-          prisma.jobRun.findMany({
-            where: whereBase,
-            orderBy: { id: "asc" },
-            skip,
-            take,
-          })
-        ),
-        fetchAllPaged((skip, take) =>
-          prisma.backgroundJobRun.findMany({
-            where: whereBase,
-            orderBy: { id: "asc" },
-            skip,
-            take,
-          })
-        ),
-        fetchAllPaged((skip, take) =>
-          prisma.notification.findMany({
-            where: whereBase,
-            orderBy: { id: "asc" },
-            skip,
-            take,
-          })
-        ),
-        fetchAllPaged((skip, take) =>
-          prisma.usageEvent.findMany({
-            where: whereBase,
-            orderBy: { id: "asc" },
-            skip,
-            take,
-          })
-        ),
-      ]);
+    const [
+      organization,
+      memberships,
+      articles,
+      actionItems,
+      topics,
+      personas,
+      notificationSettings,
+      backgroundJobs,
+      jobRuns,
+      backgroundJobRuns,
+      notifications,
+      usageEvents,
+    ] = await Promise.all([
+      prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { id: true, clerkOrgId: true, name: true, createdAt: true, updatedAt: true },
+      }),
+      prisma.membership.findMany({
+        where: whereBase,
+        orderBy: { id: "asc" },
+        select: {
+          id: true,
+          userId: true,
+          organizationId: true,
+          role: true,
+          createdAt: true,
+          user: { select: { id: true, clerkUserId: true, email: true, createdAt: true } },
+        },
+      }),
+      fetchAllPaged((skip, take) =>
+        prisma.article.findMany({ where: whereBase, orderBy: { id: "asc" }, skip, take })
+      ),
+      fetchAllPaged((skip, take) =>
+        prisma.actionItem.findMany({ where: whereBase, orderBy: { id: "asc" }, skip, take })
+      ),
+      fetchAllPaged((skip, take) =>
+        prisma.topic.findMany({ where: whereBase, orderBy: { id: "asc" }, skip, take })
+      ),
+      fetchAllPaged((skip, take) =>
+        prisma.persona.findMany({ where: whereBase, orderBy: { id: "asc" }, skip, take })
+      ),
+      prisma.notificationSettings.findUnique({
+        where: { organizationId },
+        select: {
+          id: true,
+          organizationId: true,
+          slackWebhookUrl: true,
+          slackChannel: true,
+          emailRecipients: true,
+          digestCadence: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+      fetchAllPaged((skip, take) =>
+        prisma.backgroundJob.findMany({ where: whereBase, orderBy: { id: "asc" }, skip, take })
+      ),
+      fetchAllPaged((skip, take) =>
+        prisma.jobRun.findMany({ where: whereBase, orderBy: { id: "asc" }, skip, take })
+      ),
+      fetchAllPaged((skip, take) =>
+        prisma.backgroundJobRun.findMany({ where: whereBase, orderBy: { id: "asc" }, skip, take })
+      ),
+      fetchAllPaged((skip, take) =>
+        prisma.notification.findMany({ where: whereBase, orderBy: { id: "asc" }, skip, take })
+      ),
+      fetchAllPaged((skip, take) =>
+        prisma.usageEvent.findMany({ where: whereBase, orderBy: { id: "asc" }, skip, take })
+      ),
+    ]);
 
-    logger.info("export.model_fetched", "Export model fetched", {
-      organizationId,
-      meta: { model: "Article", count: articles.length },
-    });
-    logger.info("export.model_fetched", "Export model fetched", {
-      organizationId,
-      meta: { model: "ActionItem", count: actionItems.length },
-    });
-    logger.info("export.model_fetched", "Export model fetched", {
-      organizationId,
-      meta: { model: "BackgroundJob", count: backgroundJobs.length },
-    });
-    logger.info("export.model_fetched", "Export model fetched", {
-      organizationId,
-      meta: { model: "JobRun", count: jobRuns.length },
-    });
-    logger.info("export.model_fetched", "Export model fetched", {
-      organizationId,
-      meta: { model: "BackgroundJobRun", count: backgroundJobRuns.length },
-    });
-    logger.info("export.model_fetched", "Export model fetched", {
-      organizationId,
-      meta: { model: "Notification", count: notifications.length },
-    });
-    logger.info("export.model_fetched", "Export model fetched", {
-      organizationId,
-      meta: { model: "UsageEvent", count: usageEvents.length },
-    });
+    const models = [
+      { name: "Organization", count: organization ? 1 : 0 },
+      { name: "Membership", count: memberships.length },
+      { name: "Article", count: articles.length },
+      { name: "ActionItem", count: actionItems.length },
+      { name: "Topic", count: topics.length },
+      { name: "Persona", count: personas.length },
+      { name: "NotificationSettings", count: notificationSettings ? 1 : 0 },
+      { name: "BackgroundJob", count: backgroundJobs.length },
+      { name: "JobRun", count: jobRuns.length },
+      { name: "BackgroundJobRun", count: backgroundJobRuns.length },
+      { name: "Notification", count: notifications.length },
+      { name: "UsageEvent", count: usageEvents.length },
+    ];
+    for (const { name, count } of models) {
+      logger.info("export.model_fetched", "Export model fetched", {
+        organizationId,
+        meta: { model: name, count },
+      });
+    }
 
     const exportObj = {
       meta: {
         organizationId,
         asOfIso,
         generatedAtIso: new Date().toISOString(),
-        schemaVersion: 1,
+        schemaVersion: 2,
         requestId: payload.requestId,
+      },
+      organization: organization ?? null,
+      businessIdentity: {
+        memberships,
+        topics,
+        personas,
+        notificationSettings,
       },
       core: {
         articles,

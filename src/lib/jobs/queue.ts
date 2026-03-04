@@ -7,7 +7,8 @@ type JobType =
   | "GENERATE_ACTIONS_FOR_ARTICLE"
   | "NOTIFY"
   | "RETENTION_ENFORCER"
-  | "RUN_RECIPE";
+  | "RUN_RECIPE"
+  | "EXPORT_ORG_DATA";
 
 type EnqueueOptions = {
   organizationId: string;

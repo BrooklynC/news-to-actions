@@ -83,6 +83,8 @@ export async function GET(request: NextRequest) {
 
   const mode = orgId ? "single-org" : "multi-org";
 
+  const timeToFirstDbMs = Date.now() - startTime;
+
   const now = new Date();
   const lockKey = CRON_LOCK_KEY;
   const expiresAt = new Date(now.getTime() + 5 * 60 * 1000);
@@ -116,7 +118,7 @@ export async function GET(request: NextRequest) {
     log.info("cron.skipped_overlap", "Cron skipped due to overlap", {
       requestId,
       durationMs,
-      meta: { lockKey },
+      meta: { lockKey, timeToFirstDbMs },
     });
     return NextResponse.json(
       { ok: true, skipped: true, reason: "overlap", requestId, durationMs },
@@ -132,7 +134,7 @@ export async function GET(request: NextRequest) {
     log.info("cron.start", "Cron run started", {
       requestId,
       cronRunId: cronRun.id,
-      meta: { mode, ...(orgId ? { orgId } : {}), limit, perOrg },
+      meta: { mode, timeToFirstDbMs, ...(orgId ? { orgId } : {}), limit, perOrg },
     });
 
     try {
@@ -228,6 +230,7 @@ export async function GET(request: NextRequest) {
           durationMs,
           meta: {
             mode: "single-org",
+            timeToFirstDbMs,
             orgId,
             jobsProcessed: result.processed,
             jobsSkipped: 0,
@@ -321,6 +324,7 @@ export async function GET(request: NextRequest) {
         durationMs,
         meta: {
           mode: "multi-org",
+          timeToFirstDbMs,
           processedOrgs,
           jobsProcessed: totalClaimed,
           jobsSkipped: 0,

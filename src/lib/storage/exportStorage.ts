@@ -49,7 +49,7 @@ function createLocalExportStorage(): ExportStorage {
       await fs.writeFile(fullPath, body, { flag: "w" });
       const sizeBytes = body.length;
       log.info("export_storage.put", "Export artifact written", {
-        meta: { key, sizeBytes, backend: BACKEND_LOCAL },
+        meta: { key, sizeBytes, backend: BACKEND_LOCAL, contentType },
       });
       return { key, sizeBytes };
     },

@@ -406,13 +406,110 @@ Verified locally:
 * Idempotency enforcement
 * Backoff + DEAD (NOTIFY)
 
-Not verified in production:
+---
 
-* CRON_SECRET in Vercel
-* Overlap guard logs
-* Notification dedupe behavior
-* JobRun metrics consistency
-* Emergency cron disable switch behavior
+## Phase 6 — AI Cost & Governance (Documentation + Existing Limits)
+
+- `docs/ai-cost-governance.md` — Design for token tracking, cost visibility, model fallback
+- `src/lib/usage/limits.ts` — Implemented: PER_MIN_LIMIT=5, PER_DAY_LIMIT=100 per org per action (SUMMARIZE, GENERATE_ACTIONS)
+
+Token tracking and cost-per-org require schema change (UsageEvent extension or TokenUsage model). Documented in ai-cost-governance.md. No new dependencies; uses existing OpenAI response usage metadata when implemented.
+
+---
+
+## Phase 5 — Security & Risk (Documentation)
+
+- `docs/secret-rotation.md` — Secret rotation policy (CRON_SECRET, ORG_DELETE_CONFIRM_SECRET, DATABASE_URL, OPENAI_API_KEY)
+
+### Server Action Authorization Audit
+
+Reviewed server actions and cron route:
+
+- `src/app/app/actions.ts` — All use getOrgAndRedirect or requireOrgAndUser
+- `src/app/app/actions/actionItem.actions.ts` — Uses requireOrgAndUser
+- `src/app/app/observability/actions.ts` — Uses auth() and requireOrgAndUser for destructive ops
+- `src/app/app/server-actions.ts` — Uses auth() with orgId
+- `src/app/app/settings/notifications/actions.ts` — Uses auth()
+- `src/app/app/articles/actions.ts` — Uses getOrgAndRedirect
+- `src/app/api/cron/run-jobs/route.ts` — Secret-gated (x-cron-secret); no Clerk
+- `src/app/api/personas/route.ts` — Uses auth()
+- `src/app/api/topics/route.ts` — Uses auth()
+
+No missing org-scoping found. Cron endpoint correctly uses secret (not Clerk) for external scheduler.
+
+### Clerk Permission Audit
+
+- `docs/clerk-permission-audit.md` — Audit completed: route protection, org scoping, destructive ops, sync; no gaps found. Do not change Clerk config without explicit review.
+
+### Pending (Requires Developer Review)
+
+- Cron endpoint rate limiting: not implemented; consider Vercel Edge Config or external rate limiter for x-cron-secret abuse
+- Ingestion abuse guardrails: topic query length, article URL validation — partial; add limits if abuse observed
+
+---
+
+## Phase 2 Production Verification (PRODUCTION ACTION REQUIRED)
+
+The following items require developer access to Vercel and production environment.
+
+### CRON_SECRET Verified in Vercel
+
+Action: In Vercel Project Settings → Environment Variables, confirm CRON_SECRET is set for Production. Value must match the secret used by your cron scheduler (e.g. Vercel Cron, external cron). Verification: Cron POST with x-cron-secret returns 200; without it returns 401.
+
+### pnpm prisma migrate deploy confirmed
+
+Action: Run `pnpm prisma migrate deploy` against production DATABASE_URL (or use Vercel deploy hook; migrations run as part of build if configured). Verification: All migrations applied; no pending migrations.
+
+### Dev/prod DB parity audit
+
+Action: Compare `prisma migrate status` for dev and prod. Ensure both use same migration history. Verification: _prisma_migrations table identical migration list.
+
+### Cron 401/200 tested in production
+
+Action:
+```bash
+# 401 without secret
+curl -X POST https://YOUR_PROD_URL/api/cron/run-jobs
+
+# 200 with secret
+curl -X POST -H "x-cron-secret: YOUR_CRON_SECRET" https://YOUR_PROD_URL/api/cron/run-jobs
+```
+Verification: First returns 401; second returns 200 (or 200 with job results).
+
+### Overlap guard validated in prod logs
+
+Action: See Phase 3.5 "CronLock Overlap Guard Verified in Prod (Manual Row Test)" above. Verification: Cron skips when lock exists; no double-processing.
+
+### Notification dedupe validated in production
+
+Action: Trigger NOTIFY job for same (org, user, entityType, entityId, type) twice; confirm only one Notification row created (DB unique constraint). Verification: P2002 caught or single row; no duplicate notifications.
+
+### JobRun metrics validated in production
+
+Action: Run cron in prod; query JobRun table or Observability UI; confirm JobRun rows created for executed jobs. Verification: JobRun records visible in /app/observability.
+
+### Emergency cron disable switch verified in production (CRON_DISABLED)
+
+Action: See Phase 3.5 "CRON_DISABLED Verified in Prod" above. Verification: Cron returns early when CRON_DISABLED=1; no job processing.
+
+### Rollback procedure documented
+
+Rollback procedure (if deployment fails):
+
+1. Revert deployment in Vercel (Deployments → previous deployment → Promote to Production).
+2. If migrations were applied: assess whether to run down migration or leave DB as-is (Prisma has no built-in rollback; manual revert may be needed).
+3. If CRON_DISABLED needed: set CRON_DISABLED=1 in Vercel env to halt cron immediately.
+4. Monitor logs for errors; verify Observability UI reflects expected state.
+
+### Monitoring baseline defined
+
+Baseline metrics to monitor (see Alert Thresholds in SYSTEM_STATE):
+
+* Cron auth denied spikes: alert if > 5 denials in 10 minutes.
+* Cron overlap skips: warn if > 3 consecutive overlaps OR > 10/day.
+* Job dead-lettering: alert if >= 3 DEAD jobs in 1 hour OR >= 10/day.
+* Job failure rate: alert if failed/(succeeded+failed) > 20% over last 30 runs per org.
+* Retry backlog: alert if QUEUED jobs (runAt <= now) > 50 for any org for > 15 minutes.
 
 ---
 
@@ -592,6 +689,157 @@ Operational visibility: COMPLETE (org-scoped observability in UI)
 - Migration created + applied: 20260225155148_add_export_org_data_jobtype.
 - Verified via querying _prisma_migrations (latest includes 20260225155148_add_export_org_data_jobtype).
 - Verified schema contains EXPORT_ORG_DATA in JobType.
+
+---
+
+## Object Storage Export Artifact Backend (S3-Compatible)
+
+S3-compatible backend for org export artifacts. Backend selected via `EXPORT_STORAGE_BACKEND` env: `local_fs` (default) or `s3`. When `s3`, uses AWS SDK for PutObject, GetObject (presigned URL), DeleteObject. Supports AWS S3, Cloudflare R2, MinIO via custom endpoint. Lifecycle rules configured at bucket level; see `docs/export-storage-lifecycle.md`.
+
+Key files:
+- `src/lib/storage/exportStorage.ts` — Factory that returns local_fs or S3 implementation based on env
+- `src/lib/storage/s3ExportStorage.ts` — S3 implementation (PutObject, getSignedUrl, DeleteObject)
+- `docs/export-storage-lifecycle.md` — Bucket lifecycle rule configuration (retention, expiration)
+
+Verification (pending developer sign-off):
+- [ ] Set `EXPORT_STORAGE_BACKEND=s3`, `EXPORT_S3_BUCKET`, credentials; run EXPORT_ORG_DATA job; confirm artifact in bucket
+- [ ] Confirm signed URL returns object within expiry window
+- [ ] Confirm no PII in log output (key, sizeBytes, backend only)
+
+Status: IMPLEMENTED — AWAITING LOCAL VERIFICATION
+Last Updated: Feb 21, 2026
+
+---
+
+## Org-Level Export (Deterministic; Complete; Org-Isolated; Timestamped; Structured)
+
+Full org-level export includes organization record, business identity (memberships with user, topics, personas, notification settings), core records (articles, actionItems, backgroundJobs, jobRuns), and operational logs (backgroundJobRuns, notifications, usageEvents). Export is deterministic (asOfIso snapshot), org-isolated, and produces JSON artifact. Server action `requestOrgExport` enqueues EXPORT_ORG_DATA job; cron run processes it.
+
+Key files:
+- `src/lib/jobs/handlers/exportOrgData.ts` — Export handler; fetches all org-scoped models, writes JSON via exportStorage
+- `src/app/app/actions.ts` — `requestOrgExport()` server action; enqueues EXPORT_ORG_DATA with idempotencyKey `export-org:{orgId}:{requestId}`
+
+Verification (pending developer sign-off):
+- [ ] Call `requestOrgExport` from a page/action; run cron; confirm artifact in storage (local_fs or S3)
+- [ ] Confirm export JSON includes organization, businessIdentity (memberships, topics, personas, notificationSettings), core, operational
+- [ ] Confirm no PII in log output (model names and counts only)
+
+Status: IMPLEMENTED — AWAITING LOCAL VERIFICATION
+Last Updated: Feb 21, 2026
+
+---
+
+## Org-Level Delete (Irreversible; Explicit Owner Confirmation; Pre-Delete Integrity Scan; Row-Count Plan; Structured Audit Logs)
+
+Org-level delete performs irreversible hard delete of all org-scoped data. Two-step confirmation: (1) `getOrgDeletePlan()` runs integrity scan and row-count plan, returns plan + HMAC-signed confirmation token (15min expiry). (2) `confirmOrgDelete(confirmationToken)` verifies token matches current org, executes delete in transaction. Requires ORG_DELETE_CONFIRM_SECRET or CRON_SECRET. Deletion order respects FK constraints (ActionItemAudit, ActionEvent, ActionItem, Article, Notification, NotificationSettings, BackgroundJobRun, BackgroundJob, JobRun, UsageEvent, Membership, Topic, Persona, Organization).
+
+Key files:
+- `src/lib/org/orgDelete.ts` — generateDeletePlan, executeOrgDelete, verifyOrgDeleteToken
+- `src/app/app/actions.ts` — getOrgDeletePlan(), confirmOrgDelete(confirmationToken)
+
+Verification (pending developer sign-off):
+- [ ] Call getOrgDeletePlan() from org context; confirm plan shows rowCounts; receive confirmationToken
+- [ ] Call confirmOrgDelete(confirmationToken) with same org; confirm all org data deleted; redirected to sign-in
+- [ ] Confirm no PII in log output (organizationId, rowCounts, model names, counts only)
+
+Status: IMPLEMENTED — AWAITING LOCAL VERIFICATION
+Last Updated: Feb 21, 2026
+
+---
+
+## Integrity Validation Tooling (Cross-Org References; Orphan Prevention; Fail-Safe)
+
+Integrity validation scans org-scoped data for cross-org references (ActionItem→Article, ActionItem→Topic, ActionItem→Persona, Article→Topic) and orphans (references to non-existent records). `validateOrgIntegrity(organizationId)` returns `{ ok, issues }`; if ok is false, destructive operations must block. Integrated into org delete: `generateDeletePlan` calls `validateOrgIntegrity` and throws if issues found.
+
+Key files:
+- `src/lib/org/integrityValidation.ts` — validateOrgIntegrity
+- `src/lib/org/orgDelete.ts` — calls validateOrgIntegrity before plan generation
+
+Verification (pending developer sign-off):
+- [ ] Call validateOrgIntegrity for org with clean data; confirm ok=true
+- [ ] (Optional) Introduce cross-org reference in test DB; confirm ok=false and issues list
+- [ ] Confirm no PII in log output (organizationId, issueCount, model names only)
+
+Status: IMPLEMENTED — AWAITING LOCAL VERIFICATION
+Last Updated: Feb 21, 2026
+
+---
+
+## Phase 8 — Repo Hygiene (Completed)
+
+- Removed debug artifacts: console.log and JobType import from observability page
+- Removed unused imports: BulletedText, redirect from articles page; topicMap from observability actions; ActionItemListSchema, enforceCaps, dedupeByNormalizedText, normalizeActionText from summarize.ts; LEVELS from logger.ts
+- Removed unused eslint-disable from db.ts
+
+Lint: 0 warnings. Build: passing.
+
+---
+
+## Phase 4 — Scalability & Performance (Documentation)
+
+Implemented documentation and scripts:
+
+- `scripts/cron-stress-test.sh` — Cron throughput stress test (concurrent requests)
+- `docs/slo-backoff.md` — Queue depth SLO, backoff tuning, OpenAI rate-limit strategy
+- `docs/index-review.md` — Current Prisma indexes; recommendations; production query analysis steps
+- `docs/cold-start-memory.md` — Cold start measurement; memory profiling steps
+
+Verification (pending developer sign-off):
+- [ ] Run cron-stress-test.sh against prod or staging; confirm throughput acceptable
+- [ ] Review SLO targets; adjust backoff if needed under load
+- [ ] Run pg_stat_statements under load; add indexes for slow queries if any
+
+---
+
+## Phase 3.5 Production Validation (PRODUCTION ACTION REQUIRED)
+
+### CRON_DISABLED Verified in Prod
+
+Item: Production validation: CRON_DISABLED verified in prod
+Action:
+1. In Vercel (or prod env), set CRON_DISABLED=1.
+2. Trigger cron (external scheduler or manual POST to /api/cron/run-jobs with x-cron-secret).
+3. Confirm response includes skip/short-circuit; no job processing occurs.
+4. Check prod logs for structured event "cron.disabled" (level warn).
+5. Set CRON_DISABLED=0 to restore normal operation.
+Verification: Cron returns early when CRON_DISABLED=1; "cron.disabled" in logs.
+
+### CronLock Overlap Guard Verified in Prod (Manual Row Test)
+
+Item: Production validation: CronLock overlap guard verified in prod (manual row test)
+Action:
+1. Insert a CronLock row in prod DB with key "cron:run-jobs:global", owner "manual-test", expiresAt = now + 5min.
+2. Trigger cron; confirm response includes { ok: true, skipped: true, reason: "overlap" }.
+3. Delete the manual CronLock row.
+4. Trigger cron again; confirm jobs run normally.
+Verification: Cron skips when lock exists; runs when lock removed. No double-processing.
+
+---
+
+## Phase 3.5 Audit Completeness Validation
+
+Confirm structured logs exist for success/failure/retry/retention (no PII leakage).
+
+### Required Log Events (per SYSTEM_STATE)
+
+| Event | Location | Purpose |
+|-------|----------|---------|
+| job.start | runner.ts | Job execution start |
+| job.success | runner.ts | Job completed successfully |
+| job.fail | runner.ts | Job failed, will retry |
+| job.dead | runner.ts | Job moved to DEAD |
+| cron.disabled | run-jobs/route.ts | CRON_DISABLED skip |
+| retention.enforcer.* | retentionEnforcer.ts | Retention execution |
+| export.* | exportOrgData.ts | Export job |
+| org.delete.* | orgDelete.ts | Org delete |
+| integrity.validation.* | integrityValidation.ts | Integrity scan |
+
+### Verification (Pending Developer Sign-Off)
+
+- [ ] Run cron with success path; grep logs for "job.success"
+- [ ] Run cron with failure (SIMULATE_JOB_FAILURE); grep logs for "job.fail"
+- [ ] Run retention-enforcer; grep logs for "retention.enforcer"
+- [ ] Confirm no user-supplied content, emails, names, or raw payloads in log output
 
 ---
 

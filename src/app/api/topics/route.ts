@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { checkTopicLimit } from "@/lib/guardrails/ingestion";
 
 function noOrg() {
   return NextResponse.json(
@@ -53,6 +54,11 @@ export async function POST(req: Request) {
       { error: "name and query are required" },
       { status: 400 }
     );
+  }
+
+  const limit = await checkTopicLimit(org.id);
+  if (!limit.ok) {
+    return NextResponse.json({ error: limit.message }, { status: 429 });
   }
 
   try {

@@ -1,3 +1,4 @@
+import { log } from "@/lib/observability/logger";
 import { redirect } from "next/navigation";
 
 const BANNER_URL = "/app/articles";
@@ -13,14 +14,9 @@ export async function safeAction<T>(fn: () => Promise<T>): Promise<T> {
     return await fn();
   } catch (error) {
     if (isRedirectError(error)) throw error;
-    if (process.env.NODE_ENV !== "production") {
-      console.error("SERVER_ACTION_FAILED", {
-        error:
-          error instanceof Error
-            ? { message: error.message, stack: error.stack }
-            : error,
-      });
-    }
+    log.error("server_action.failed", "Server action failed", {
+      err: error instanceof Error ? error : new Error(String(error)),
+    });
     redirect(`${BANNER_URL}?banner=${encodeURIComponent("An unexpected error occurred. Please try again.")}`);
   }
 }

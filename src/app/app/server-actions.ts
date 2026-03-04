@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { getAuthContext } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { enforceCaps } from "@/lib/guardrails/caps";
+import { checkTopicLimit } from "@/lib/guardrails/ingestion";
 import { normalizeActionText } from "@/lib/guardrails/dedupe";
 import { log } from "@/lib/observability/logger";
 import { fetchGoogleNewsRss } from "@/lib/rss";
@@ -27,6 +28,9 @@ export async function createTopic(formData: FormData) {
   const name = (formData.get("name") as string)?.trim() ?? "";
   const query = (formData.get("query") as string)?.trim() ?? "";
   if (!name || !query) redirect(`${ARTICLES}?error=` + encodeURIComponent("name and query are required"));
+
+  const topicLimit = await checkTopicLimit(org.id);
+  if (!topicLimit.ok) redirect(`${ARTICLES}?error=` + encodeURIComponent(topicLimit.message));
 
   try {
     await prisma.topic.create({ data: { organizationId: org.id, name, query } });

@@ -24,6 +24,9 @@ export function AppNav({ failureCount = 0 }: { failureCount?: number }) {
       <Link href="/app/settings/notifications" className={linkClass("/app/settings/notifications")}>
         Settings
       </Link>
+      <Link href="/app/settings/data" className={linkClass("/app/settings/data")}>
+        Data
+      </Link>
       <Link
         href="/app/observability"
         className={`relative ${linkClass("/app/observability")}`}
