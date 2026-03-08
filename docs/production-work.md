@@ -83,7 +83,7 @@ All work that **must be done in or for Production**. Use this as the single plac
    curl -s -w "\n%{http_code}" "https://YOUR_VERCEL_URL/api/cron/run-jobs?secret=YOUR_CRON_SECRET&limit=1"
    ```
 
-5. **Configure Vercel Cron** (optional): `vercel.json` already defines a cron that hits `/api/cron/run-jobs` every 5 minutes. Vercel automatically adds `Authorization: Bearer <CRON_SECRET>` when invoking cron, so ensure `CRON_SECRET` is set in Vercel Project → Settings → Environment Variables (Production).
+5. **Configure external cron** (Hobby plan): Vercel Hobby limits cron to once/day. Use an external service (e.g. [cron-job.org](https://cron-job.org)) to hit `https://YOUR_VERCEL_URL/api/cron/run-jobs?secret=YOUR_CRON_SECRET&limit=25` every 5 minutes (`*/5 * * * *`).
 
 ---
 
