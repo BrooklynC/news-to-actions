@@ -12,12 +12,12 @@ export function AdminSubNav() {
   const linkClass = (active: boolean) =>
     `rounded-full px-4 py-2 text-sm font-medium transition-colors ${
       active
-        ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-        : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+        ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 font-semibold"
+        : "text-stone-600 hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
     }`;
 
   return (
-    <nav className="flex flex-wrap gap-1 border-b border-zinc-200 pb-3 dark:border-zinc-700">
+    <nav className="flex flex-wrap gap-1 border-b border-stone-200 pb-3 dark:border-stone-700">
       <Link href="/app/admin/actions" className={linkClass(isActions)}>
         Actions
       </Link>

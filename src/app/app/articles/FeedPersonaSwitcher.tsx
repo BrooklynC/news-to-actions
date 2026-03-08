@@ -32,7 +32,7 @@ export function FeedPersonaSwitcher({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+      <span className="text-xs font-medium text-stone-500 dark:text-stone-400">
         Show actions for
       </span>
       <div className="flex flex-wrap gap-1">
@@ -40,8 +40,8 @@ export function FeedPersonaSwitcher({
           href={href("all")}
           className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
             isAll
-              ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-              : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
+              ? "bg-teal-600 text-white dark:bg-teal-500 dark:text-white"
+              : "bg-stone-100 text-stone-700 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700"
           }`}
         >
           All personas
@@ -54,8 +54,8 @@ export function FeedPersonaSwitcher({
               href={href(p.id)}
               className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
                 active
-                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                  : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
+                  ? "bg-teal-600 text-white dark:bg-teal-500 dark:text-white"
+                  : "bg-stone-100 text-stone-700 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700"
               }`}
             >
               {p.name}

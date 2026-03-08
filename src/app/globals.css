@@ -1,8 +1,20 @@
 @import "tailwindcss";
 
+/* Dark mode: class-based so we can toggle via Settings */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #faf9f7;
+  --foreground: #1c1917;
+  --accent: #0d9488;
+  --accent-hover: #0f766e;
+}
+
+html.dark {
+  --background: #141413;
+  --foreground: #fafaf9;
+  --accent: #2dd4bf;
+  --accent-hover: #5eead4;
 }
 
 @theme inline {
@@ -12,17 +24,12 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Line-clamp utilities (fallback when Tailwind line-clamp not available) */

@@ -54,23 +54,23 @@ export default async function AppLayout({
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <header className="border-b border-zinc-200/70 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5 sm:px-6 sm:py-6">
+    <div className="min-h-screen bg-[var(--background)]">
+      <header className="sticky top-0 z-40 border-b border-stone-200/60 bg-white/80 backdrop-blur-md dark:border-stone-800/60 dark:bg-stone-950/80">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6 sm:py-5">
           <Link
             href="/app/articles"
-            className="flex items-center gap-2 text-lg font-medium text-zinc-900 dark:text-zinc-100"
+            className="flex items-center gap-2 text-xl font-semibold tracking-tight text-stone-900 dark:text-stone-100"
           >
             News Actions
-            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+            <span className="rounded-full bg-stone-200/80 px-2.5 py-0.5 text-xs font-medium text-stone-600 dark:bg-stone-700/80 dark:text-stone-300">
               beta
             </span>
           </Link>
-          <div className="flex items-center gap-4 sm:gap-6">
+          <div className="flex items-center gap-3 sm:gap-5">
             <AppNav failureCount={failedCount} isAdmin={isAdmin} />
-            <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
+            <div className="h-5 w-px bg-stone-200 dark:bg-stone-700" />
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+              <span className="text-xs font-medium text-stone-500 dark:text-stone-400">
                 Organization
               </span>
               <OrganizationSwitcher
@@ -79,7 +79,7 @@ export default async function AppLayout({
               />
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+              <span className="text-xs font-medium text-stone-500 dark:text-stone-400">
                 You
               </span>
               <UserButton afterSignOutUrl="/" />
@@ -87,7 +87,7 @@ export default async function AppLayout({
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
         {children}
       </main>
     </div>

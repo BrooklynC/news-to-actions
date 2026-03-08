@@ -284,9 +284,9 @@ Ongoing UI improvements; add concrete items as you go (here or in `docs/ux-backl
 
 
 ## ✅ Pre-Production Test Checklist (Mandatory Before Production)
-- [ ] Migrations apply cleanly
-- [ ] Cron returns 401 without secret
-- [ ] Cron returns 200 with secret
+- [x] Migrations apply cleanly
+- [x] Cron returns 401 without secret
+- [x] Cron returns 200 with secret
 - [ ] Manual CronLock row test → { skipped: true }
 - [ ] Backoff + DEAD behavior verified
 - [ ] Notification dedupe verified

@@ -49,9 +49,9 @@ All work that **must be done in or for Production**. Use this as the single plac
 
 | Done | Item | Reference |
 |------|------|-----------|
-| ☐ | Migrations apply cleanly | ROADMAP Pre-Production |
-| ☐ | Cron returns 401 without secret | ROADMAP Pre-Production |
-| ☐ | Cron returns 200 with secret | ROADMAP Pre-Production |
+| ☑ | Migrations apply cleanly | ROADMAP Pre-Production |
+| ☑ | Cron returns 401 without secret | ROADMAP Pre-Production |
+| ☑ | Cron returns 200 with secret | ROADMAP Pre-Production |
 | ☐ | Manual CronLock row test → { skipped: true } | ROADMAP Pre-Production |
 | ☐ | Backoff + DEAD behavior verified | ROADMAP Pre-Production |
 | ☐ | Notification dedupe verified | ROADMAP Pre-Production |
@@ -60,6 +60,30 @@ All work that **must be done in or for Production**. Use this as the single plac
 | ☐ | Logs contain no sensitive payload | ROADMAP Pre-Production |
 | ☐ | Cron endpoint is not Clerk-gated (secret-gated only) | ROADMAP Pre-Production |
 | ☐ | Deterministic simulation validated for all critical job types | ROADMAP Pre-Production |
+
+---
+
+## Next Steps for Production (Vercel)
+
+1. **Set CRON_SECRET** in Vercel Project → Settings → Environment Variables (Production). Generate a strong secret (e.g. `openssl rand -hex 32`).
+
+2. **Set DATABASE_URL** (and DIRECT_URL if using Neon) for Production. Use your production Postgres URL.
+
+3. **Run migrations against prod DB:**
+   ```bash
+   DATABASE_URL="postgresql://..." pnpm prisma migrate deploy
+   ```
+
+4. **Verify cron in production:**
+   ```bash
+   # 401 without secret
+   curl -s -o /dev/null -w "%{http_code}\n" "https://YOUR_VERCEL_URL/api/cron/run-jobs"
+
+   # 200 with secret
+   curl -s -w "\n%{http_code}" "https://YOUR_VERCEL_URL/api/cron/run-jobs?secret=YOUR_CRON_SECRET&limit=1"
+   ```
+
+5. **Configure Vercel Cron** (optional): In vercel.json, add a cron job to hit `/api/cron/run-jobs` with `x-cron-secret` header or `?secret=` query param on your preferred schedule (e.g. every 5 minutes).
 
 ---
 

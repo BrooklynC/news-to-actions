@@ -13,7 +13,7 @@ export default async function AdminDataPage({
   if (!auth?.clerkOrgId) {
     return (
       <Card className="p-5">
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+        <p className="text-sm text-stone-600 dark:text-stone-400">
           Select an organization above to access data options.
         </p>
       </Card>
@@ -37,7 +37,7 @@ export default async function AdminDataPage({
           Invite user
         </h2>
         <Card className="p-5 sm:p-6">
-          <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
+          <p className="mb-4 text-sm text-stone-600 dark:text-stone-400">
             Add a user to this organization by email. They&apos;ll receive an invitation to sign in or sign up and join. Their actions and data will appear under this org.
           </p>
           <form action={inviteUserToOrg} className="flex flex-wrap items-end gap-3">
@@ -54,12 +54,12 @@ export default async function AdminDataPage({
                 type="email"
                 required
                 placeholder="user@example.com"
-                className="w-64 rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+                className="w-64 rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
               />
             </div>
               <button
                 type="submit"
-                className="rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 active:scale-[0.98] dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+                className="rounded-full bg-teal-600 px-5 py-2.5 text-sm font-medium text-white transition-all duration-200 hover:bg-teal-700 active:scale-[0.98] dark:bg-teal-500 dark:hover:bg-teal-600"
               >
                 Send invitation
               </button>

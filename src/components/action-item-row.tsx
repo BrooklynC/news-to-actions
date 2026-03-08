@@ -44,39 +44,39 @@ export function ActionItemRow({
   const handleCancel = () => setEditing(false);
 
   return (
-    <li className="rounded-2xl border border-zinc-200/70 bg-white p-5 shadow-sm transition-shadow transition-transform duration-200 hover:shadow-md hover:-translate-y-0.5 active:shadow-sm dark:border-zinc-800 dark:bg-zinc-900/50 sm:p-6">
+    <li className="rounded-3xl border border-stone-200/60 bg-white/90 p-5 shadow-[0_2px_12px_rgba(0,0,0,0.04)] transition-all duration-200 hover:shadow-[0_4px_20px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 dark:border-stone-700/50 dark:bg-stone-900/80 dark:shadow-none sm:p-6">
       {editing ? (
         <form action={updateActionItem} className="space-y-3">
           <input type="hidden" name="id" value={item.id} />
           <div>
-            <label className="mb-1 block text-xs text-zinc-400">Title</label>
+            <label className="mb-1 block text-xs text-stone-500 dark:text-stone-400">Title</label>
             <input
               type="text"
               name="title"
               defaultValue={item.title}
               required
               minLength={3}
-              className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+              className="w-full rounded-xl border border-stone-200 bg-white dark:border-stone-600 dark:bg-stone-800/80 px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 dark:text-stone-100"
               placeholder="Title"
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-zinc-400">Description</label>
+            <label className="mb-1 block text-xs text-stone-500 dark:text-stone-400">Description</label>
             <input
               type="text"
               name="description"
               defaultValue={item.description ?? ""}
-              className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+              className="w-full rounded-xl border border-stone-200 bg-white dark:border-stone-600 dark:bg-stone-800/80 px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 dark:text-stone-100"
               placeholder="Description"
             />
           </div>
           <div className="flex flex-wrap gap-3">
             <div>
-              <label className="mb-1 block text-xs text-zinc-400">Status</label>
+              <label className="mb-1 block text-xs text-stone-500 dark:text-stone-400">Status</label>
               <select
                 name="status"
                 defaultValue={item.status}
-                className="rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+                className="rounded-xl border border-stone-200 bg-white dark:border-stone-600 dark:bg-stone-800/80 px-3 py-2.5 text-sm text-stone-900 dark:text-stone-100"
               >
                 <option value="OPEN">Open</option>
                 <option value="DONE">Done</option>
@@ -84,11 +84,11 @@ export function ActionItemRow({
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs text-zinc-400">Priority</label>
+              <label className="mb-1 block text-xs text-stone-500 dark:text-stone-400">Priority</label>
               <select
                 name="priority"
                 defaultValue={item.priority ?? ""}
-                className="rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+                className="rounded-xl border border-stone-200 bg-white dark:border-stone-600 dark:bg-stone-800/80 px-3 py-2.5 text-sm text-stone-900 dark:text-stone-100"
               >
                 <option value="">—</option>
                 <option value="LOW">LOW</option>
@@ -97,21 +97,21 @@ export function ActionItemRow({
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs text-zinc-400">Due date</label>
+              <label className="mb-1 block text-xs text-stone-500 dark:text-stone-400">Due date</label>
               <input
                 type="text"
                 name="dueDate"
                 defaultValue={item.dueDate ?? ""}
                 placeholder="YYYY-MM-DD"
-                className="rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+                className="rounded-xl border border-stone-200 bg-white dark:border-stone-600 dark:bg-stone-800/80 px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 dark:text-stone-100"
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs text-zinc-400">Persona</label>
+              <label className="mb-1 block text-xs text-stone-500 dark:text-stone-400">Persona</label>
               <select
                 name="personaId"
                 defaultValue={item.personaId ?? ""}
-                className="rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+                className="rounded-xl border border-stone-200 bg-white dark:border-stone-600 dark:bg-stone-800/80 px-3 py-2.5 text-sm text-stone-900 dark:text-stone-100"
               >
                 <option value="">—</option>
                 {personas.map((p) => (
@@ -123,11 +123,11 @@ export function ActionItemRow({
             </div>
             {canReassign && (
               <div>
-                <label className="mb-1 block text-xs text-zinc-400">Assignee</label>
+                <label className="mb-1 block text-xs text-stone-500 dark:text-stone-400">Assignee</label>
                 <select
                   name="assigneeUserId"
                   defaultValue={item.assigneeUserId ?? ""}
-                  className="rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+                  className="rounded-xl border border-stone-200 bg-white dark:border-stone-600 dark:bg-stone-800/80 px-3 py-2.5 text-sm text-stone-900 dark:text-stone-100"
                 >
                   <option value="">—</option>
                   {members.map((m) => (
@@ -142,14 +142,14 @@ export function ActionItemRow({
           <div className="flex gap-2">
             <button
               type="submit"
-              className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors transition-transform duration-150 hover:bg-zinc-800 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300 focus-visible:ring-offset-2 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+              className="rounded-full bg-teal-600 px-5 py-2.5 text-sm font-medium text-white transition-all duration-200 hover:bg-teal-700 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-offset-2 dark:bg-teal-500 dark:hover:bg-teal-600"
             >
               Save
             </button>
             <button
               type="button"
               onClick={handleCancel}
-              className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-600 transition-colors transition-transform duration-150 hover:bg-zinc-50 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300 focus-visible:ring-offset-2 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              className="rounded-full border border-stone-200 bg-white px-4 py-2 text-sm font-medium text-stone-600 transition-all duration-150 hover:bg-stone-50 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-300 focus-visible:ring-offset-2 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
             >
               Cancel
             </button>
@@ -160,13 +160,13 @@ export function ActionItemRow({
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1 space-y-1">
               <p
-                className="block max-w-full truncate font-medium text-zinc-900 dark:text-zinc-100"
+                className="block max-w-full truncate font-medium text-stone-900 dark:text-stone-100"
                 title={item.title}
               >
                 {item.title}
               </p>
               {item.description && (
-                <div className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-400">
+                <div className="mt-1 text-xs leading-5 text-zinc-600 dark:text-stone-400">
                   <ClampText
                     text={item.description}
                     lines={2}
@@ -177,7 +177,7 @@ export function ActionItemRow({
               )}
               {articleTitle != null && (
                 <p
-                  className="max-w-full truncate text-xs text-zinc-500 dark:text-zinc-400"
+                  className="max-w-full truncate text-xs text-stone-500 dark:text-stone-400"
                   title={articleTitle}
                 >
                   {articleTitle}
@@ -191,7 +191,7 @@ export function ActionItemRow({
                     ? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
                     : item.status === "DONE"
                       ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200"
-                      : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                      : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400"
                 }`}
               >
                 {item.status === "OPEN"
@@ -201,22 +201,22 @@ export function ActionItemRow({
                     : "Dismissed"}
               </span>
               {(personas.find((p) => p.id === item.personaId)?.name ?? null) && (
-                <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700 transition-colors duration-150 dark:bg-zinc-800 dark:text-zinc-400">
+                <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-medium text-stone-700 transition-colors duration-150 dark:bg-zinc-800 dark:text-stone-400">
                   {personas.find((p) => p.id === item.personaId)?.name}
                 </span>
               )}
               {(members.find((m) => m.user.id === item.assigneeUserId)?.user?.email ?? null) && (
-                <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700 transition-colors duration-150 dark:bg-zinc-800 dark:text-zinc-400">
+                <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-medium text-stone-700 transition-colors duration-150 dark:bg-zinc-800 dark:text-stone-400">
                   {members.find((m) => m.user.id === item.assigneeUserId)?.user?.email}
                 </span>
               )}
               {item.priority && (
-                <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                <span className="text-xs text-stone-500 dark:text-stone-400">
                   {item.priority}
                 </span>
               )}
               {item.dueDate && (
-                <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                <span className="text-xs text-stone-500 dark:text-stone-400">
                   Due {item.dueDate}
                 </span>
               )}
@@ -226,17 +226,17 @@ export function ActionItemRow({
             <button
               type="button"
               onClick={() => setEditing(true)}
-              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition-colors transition-transform duration-150 hover:bg-zinc-50 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300 focus-visible:ring-offset-2 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+              className="rounded-full border border-stone-200 bg-white px-3 py-2 text-sm font-medium text-stone-700 transition-all duration-150 hover:bg-stone-50 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-300 focus-visible:ring-offset-2 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-200 dark:hover:bg-stone-700"
             >
               Edit
             </button>
           </div>
           {children && (
             <details className="mt-3">
-              <summary className="cursor-pointer text-xs text-zinc-400 hover:text-zinc-200">
+              <summary className="cursor-pointer text-xs text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300">
                 History
               </summary>
-              <div className="mt-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800/50">
+              <div className="mt-2 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 dark:border-stone-700 dark:bg-stone-800/50">
                 {children}
               </div>
             </details>

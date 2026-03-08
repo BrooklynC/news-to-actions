@@ -18,7 +18,7 @@ type Props = {
 export function IngestCardServer({ organizationId, topics, personas, selectedPersonaIds, orgCadence }: Props) {
   return (
     <Card className="w-full p-5 sm:p-6">
-      <h3 className="mb-4 text-sm font-medium text-zinc-900 dark:text-zinc-100">
+      <h3 className="mb-4 text-base font-medium text-stone-900 dark:text-stone-100">
         Ingest
       </h3>
 
@@ -31,11 +31,11 @@ export function IngestCardServer({ organizationId, topics, personas, selectedPer
         />
 
         {/* Right: Personas */}
-        <div className="min-w-0 flex-1 space-y-3 lg:border-l lg:border-zinc-200 lg:pl-6 dark:lg:border-zinc-700">
-          <h4 className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+        <div className="min-w-0 flex-1 space-y-3 lg:border-l lg:border-stone-200 lg:pl-6 dark:lg:border-stone-700">
+          <h4 className="text-xs font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
             Personas
           </h4>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="text-xs text-stone-500 dark:text-stone-400">
             Personas tailor generated action items to different roles (e.g. Marketing, Sales). Select which to use for the feed.
           </p>
           <PersonasMultiSelect
@@ -48,17 +48,17 @@ export function IngestCardServer({ organizationId, topics, personas, selectedPer
               name="name"
               placeholder="e.g. Marketing, Sales"
               required
-              className="min-w-[140px] flex-1 rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+              className="min-w-[140px] flex-1 rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-500 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
             />
             <button
               type="submit"
-              className="rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-transform duration-150 hover:bg-zinc-800 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300 focus-visible:ring-offset-2 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+              className="rounded-full bg-teal-600 px-4 py-2.5 text-sm font-medium text-white transition-all duration-200 hover:bg-teal-700 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-offset-2 dark:bg-teal-500 dark:hover:bg-teal-600"
             >
               Add persona
             </button>
           </form>
           {personas.length > 0 && (
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            <p className="text-xs text-stone-500 dark:text-stone-400">
               {personas.length} persona{personas.length === 1 ? "" : "s"}
             </p>
           )}
