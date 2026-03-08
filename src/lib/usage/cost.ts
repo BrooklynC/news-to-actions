@@ -1,25 +1,27 @@
 /**
  * AI cost calculation from UsageEvent token data.
- * Prices per 1M tokens (OpenAI list pricing; update when pricing changes).
- * @see https://openai.com/api/pricing/
+ * Prices per 1M tokens (Anthropic Claude list pricing; update when pricing changes).
+ * @see https://www.anthropic.com/pricing
  */
 const PRICE_PER_1M_INPUT: Record<string, number> = {
+  "claude-sonnet-4-20250514": 3.0,
   "gpt-4o-mini": 0.15,
   "gpt-4o": 2.5,
   "gpt-4-turbo": 10.0,
 };
 
 const PRICE_PER_1M_OUTPUT: Record<string, number> = {
+  "claude-sonnet-4-20250514": 15.0,
   "gpt-4o-mini": 0.6,
   "gpt-4o": 10.0,
   "gpt-4-turbo": 30.0,
 };
 
-const DEFAULT_INPUT_PRICE = 0.15;
-const DEFAULT_OUTPUT_PRICE = 0.6;
+const DEFAULT_INPUT_PRICE = 3.0;
+const DEFAULT_OUTPUT_PRICE = 15.0;
 
 function priceForModel(model: string | null, kind: "input" | "output"): number {
-  const key = model ?? "gpt-4o-mini";
+  const key = model ?? "claude-sonnet-4-20250514";
   const map = kind === "input" ? PRICE_PER_1M_INPUT : PRICE_PER_1M_OUTPUT;
   return map[key] ?? (kind === "input" ? DEFAULT_INPUT_PRICE : DEFAULT_OUTPUT_PRICE);
 }

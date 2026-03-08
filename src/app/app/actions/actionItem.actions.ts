@@ -5,11 +5,12 @@ import { z } from "zod";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireOrgAndUser } from "@/lib/auth";
+import { isUserAdmin } from "@/lib/auth-admin";
 import { normalizeActionTitle } from "@/lib/domain/normalizeActionTitle";
 import { normalizeActionText } from "@/lib/guardrails/dedupe";
 import { enqueueJob } from "@/lib/jobs/queue";
 
-const ACTIONS = "/app/actions";
+const ACTIONS = "/app/admin/actions";
 const TITLE_MAX = 120;
 
 function toJsonValue(value: unknown): Prisma.InputJsonValue {
@@ -34,23 +35,22 @@ function toJsonValue(value: unknown): Prisma.InputJsonValue {
   return String(value);
 }
 
-type ActionStatus = "OPEN" | "IN_PROGRESS" | "DONE" | "DISMISSED";
+type ActionStatus = "OPEN" | "DONE" | "DISMISSED";
 
 function isValidStatusTransition(from: ActionStatus, to: ActionStatus): boolean {
   if (from === to) return true;
 
   const allowed: Record<ActionStatus, ActionStatus[]> = {
-    OPEN: ["IN_PROGRESS", "DONE", "DISMISSED"],
-    IN_PROGRESS: ["DONE", "DISMISSED", "OPEN"],
+    OPEN: ["DONE", "DISMISSED"],
     DONE: ["OPEN"],
     DISMISSED: ["OPEN"],
   };
 
-  return (allowed[from] ?? []).includes(to);
+  return (allowed[from] ?? allowed["OPEN"]).includes(to);
 }
 
 const ActionPrioritySchema = z.enum(["LOW", "MEDIUM", "HIGH"]);
-const ActionStatusSchema = z.enum(["OPEN", "IN_PROGRESS", "DONE", "DISMISSED"]);
+const ActionStatusSchema = z.enum(["OPEN", "DONE", "DISMISSED"]);
 
 export async function updateActionItem(formData: FormData) {
   let organizationId: string;
@@ -97,10 +97,17 @@ export async function updateActionItem(formData: FormData) {
   });
   if (!existing) redirect(`${ACTIONS}?error=` + encodeURIComponent("Action item not found."));
 
+  const admin = await isUserAdmin(organizationId, userId);
+  if (!admin && assigneeUserId !== undefined && existing.assigneeUserId !== assigneeUserId) {
+    redirect(`${ACTIONS}?error=` + encodeURIComponent("Only admins can reassign action items."));
+  }
+
+  const fromStatus = existing.status as ActionStatus;
+  const toStatus = status as ActionStatus | undefined;
   if (
-    status != null &&
-    existing.status !== status &&
-    !isValidStatusTransition(existing.status as ActionStatus, status as ActionStatus)
+    toStatus != null &&
+    fromStatus !== toStatus &&
+    !isValidStatusTransition(fromStatus, toStatus)
   ) {
     redirect(
       `${ACTIONS}?error=` +
@@ -232,6 +239,7 @@ export async function createActionItemFromUI(formData: FormData) {
       status: "OPEN",
       priorityLevel: "MEDIUM",
       personaId,
+      assigneeUserId: userId,
       createdByAI: false,
     },
   });

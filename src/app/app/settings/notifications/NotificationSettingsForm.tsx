@@ -20,7 +20,7 @@ export function NotificationSettingsForm({ initial }: Props) {
     if (result.success) {
       setSaved(true);
     } else {
-      setError(result.error ?? "Failed to save.");
+      setError(result.error ?? "Couldn’t save. Check your entries and try again.");
     }
   }
 
@@ -35,7 +35,7 @@ export function NotificationSettingsForm({ initial }: Props) {
       )}
       {saved && (
         <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700 dark:border-green-900/40 dark:bg-green-950/30 dark:text-green-200">
-          Saved
+          Settings saved
         </div>
       )}
 
@@ -77,7 +77,7 @@ export function NotificationSettingsForm({ initial }: Props) {
           />
         </div>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Delivery not enabled yet. This stores preferences only.
+          Delivery is not enabled yet; these settings are saved for when it is.
         </p>
       </Card>
 
@@ -120,7 +120,7 @@ export function NotificationSettingsForm({ initial }: Props) {
           </select>
         </div>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Delivery not enabled yet.
+          Delivery is not enabled yet; preferences are saved for when it is.
         </p>
       </Card>
 

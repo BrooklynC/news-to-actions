@@ -12,6 +12,7 @@ import { executeGenerateActionsForArticle } from "@/lib/domain/generateActions";
 import { executeIngestTopic } from "@/lib/domain/ingestTopic";
 import { executeSummarizeArticle } from "@/lib/domain/summarize";
 import { createNotificationIdempotent } from "@/lib/notifications";
+import { enqueueJob } from "./queue";
 import { parseJobPayload } from "./schemas";
 import { NotifyPayloadSchema } from "./schemas";
 import type { JobType } from "@prisma/client";
@@ -177,6 +178,12 @@ export async function runQueuedJobs(
             job.payloadJson
           );
           await executeSummarizeArticle(organizationId, articleId);
+          await enqueueJob({
+            organizationId,
+            type: "GENERATE_ACTIONS_FOR_ARTICLE",
+            payload: { articleId },
+            idempotencyKey: `generate:${organizationId}:${articleId}`,
+          });
           break;
         }
         case "GENERATE_ACTIONS_FOR_ARTICLE": {
@@ -193,6 +200,18 @@ export async function runQueuedJobs(
             job.payloadJson
           );
           ingestionResult = await executeIngestTopic(organizationId, topicId);
+          const articlesToSummarize = await prisma.article.findMany({
+            where: { topicId, organizationId, summary: null },
+            select: { id: true },
+          });
+          for (const a of articlesToSummarize) {
+            await enqueueJob({
+              organizationId,
+              type: "SUMMARIZE_ARTICLE",
+              payload: { articleId: a.id },
+              idempotencyKey: `summarize:${organizationId}:${a.id}`,
+            });
+          }
           break;
         }
         case "NOTIFY": {

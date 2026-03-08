@@ -193,10 +193,12 @@ export function enrichTopicsWithQueueState<
 }
 
 export function enrichTopicsWithHealth<
-  T extends { id: string; cadence: string },
+  T extends { id: string; cadence?: string },
 >(
   topics: T[],
-  runDatesByTopicId: Map<string, RunDates>
+  runDatesByTopicId: Map<string, RunDates>,
+  /** When set, use this cadence for all topics (e.g. org-level cadence). */
+  cadenceOverride?: string
 ): (T & TopicHealthEnrichment)[] {
   const now = new Date();
   return topics.map((t) => {
@@ -204,8 +206,9 @@ export function enrichTopicsWithHealth<
       lastIngestSuccessAt: null,
       lastIngestFailureAt: null,
     };
+    const cadenceForHealth = cadenceOverride ?? t.cadence ?? "DAILY";
     const health = computeHealth(
-      t.cadence,
+      cadenceForHealth,
       dates.lastIngestSuccessAt,
       dates.lastIngestFailureAt,
       now

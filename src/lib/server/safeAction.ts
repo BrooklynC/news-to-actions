@@ -17,6 +17,6 @@ export async function safeAction<T>(fn: () => Promise<T>): Promise<T> {
     log.error("server_action.failed", "Server action failed", {
       err: error instanceof Error ? error : new Error(String(error)),
     });
-    redirect(`${BANNER_URL}?banner=${encodeURIComponent("An unexpected error occurred. Please try again.")}`);
+    redirect(`${BANNER_URL}?banner=${encodeURIComponent("Something went wrong. Please try again.")}`);
   }
 }

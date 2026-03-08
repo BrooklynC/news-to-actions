@@ -2,16 +2,8 @@ import { Banner } from "@/components/ui/Banner";
 import { Card } from "@/components/ui/Card";
 import { formatRelativeTime } from "@/lib/time";
 import { ClampText } from "@/components/ui/ClampText";
-import { PageHeader } from "@/components/ui/PageHeader";
-import { ArticleSummarizeButton } from "./ArticleSummarizeButton";
-import { ArticleGenerateButton } from "./ArticleGenerateButton";
-import {
-  runJobsNow,
-  runSchedulerNowDev,
-  seedDevTopic,
-  enqueueIngestForDevTopic,
-} from "@/app/app/actions";
-import { generateActions, summarizeArticle } from "./actions";
+import { setActionItemStatus } from "./actions";
+import { FeedPersonaSwitcher } from "./FeedPersonaSwitcher";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { getAuthContext } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -23,13 +15,20 @@ import {
   enrichTopicsWithQueueState,
 } from "@/lib/topics/health";
 import type { TopicHealth } from "@/lib/types/topicHealth";
-import { getSystemHealthSummary } from "@/app/app/observability/actions";
 import { IngestCardServer } from "./IngestCard.server";
+import { ExecuteDashboardButton } from "./ExecuteDashboardButton";
+
+type ArticleActionItem = {
+  id: string;
+  text: string;
+  status: string;
+  persona: { id: string; name: string } | null;
+};
 
 export default async function ArticlesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; message?: string; banner?: string }>;
+  searchParams: Promise<{ error?: string; message?: string; banner?: string; persona?: string }>;
 }) {
   const authContext = await getAuthContext();
   if (!authContext) return null;
@@ -39,11 +38,14 @@ export default async function ArticlesPage({
   const { orgId } = await auth();
   const params = await searchParams;
 
-  let org: { id: string } | null = null;
+  let org: { id: string; ingestCadence: string } | null = null;
   let topics: {
     id: string;
     name: string;
     query: string;
+    displayName: string | null;
+    searchPhrase: string | null;
+    focusFilter: string;
     lastIngestAt: Date | null;
     cadence: string;
     nextRunAt: Date | null;
@@ -62,63 +64,91 @@ export default async function ArticlesPage({
       summary: string | null;
       createdAt: Date;
       _count: { actionItems: number };
-      actionItems: { id: string; text: string; persona: { id: string; name: string } | null }[];
+      actionItems: ArticleActionItem[];
     }[];
   }[] = [];
-  let personas: { id: string; name: string }[] = [];
+  let personas: { id: string; name: string; recipeType: string | null }[] = [];
+  let selectedPersonaIds: string[] = [];
+  let jobStatus = { queued: 0, processing: 0 };
 
   if (orgId) {
     org = await prisma.organization.findUnique({
       where: { clerkOrgId: orgId },
-      select: { id: true },
+      select: { id: true, ingestCadence: true },
     });
     if (org) {
-      const [topicsData, personasData, healthEnrichment, queueStateEnrichment] = await Promise.all([
-        prisma.topic.findMany({
-          where: { organizationId: org.id },
-          orderBy: { updatedAt: "desc" },
-          include: {
-            articles: {
-              orderBy: { createdAt: "desc" },
-              take: 5,
-              select: {
-                id: true,
-                title: true,
-                url: true,
-                source: true,
-                publishedAt: true,
-                summary: true,
-                createdAt: true,
-                _count: { select: { actionItems: true } },
-                actionItems: {
-                  where: { status: "OPEN" },
-                  include: { persona: { select: { id: true, name: true } } },
+      const [topicsData, personasData, orgSelectedData, healthEnrichment, queueStateEnrichment, jobCounts] =
+        await Promise.all([
+          prisma.topic.findMany({
+            where: { organizationId: org.id },
+            orderBy: { updatedAt: "desc" },
+            include: {
+              articles: {
+                orderBy: { createdAt: "desc" },
+                take: 5,
+                select: {
+                  id: true,
+                  title: true,
+                  url: true,
+                  source: true,
+                  publishedAt: true,
+                  summary: true,
+                  createdAt: true,
+                  _count: { select: { actionItems: true } },
+                  actionItems: {
+                    select: {
+                      id: true,
+                      text: true,
+                      status: true,
+                      persona: { select: { id: true, name: true } },
+                    },
+                  },
                 },
               },
             },
-          },
-        }),
-        prisma.persona.findMany({
-          where: { organizationId: org.id },
-          orderBy: { name: "asc" },
-          select: { id: true, name: true },
-        }),
-        getTopicHealthEnrichment(org.id),
-        getTopicQueueStateEnrichment(org.id),
-      ]);
+          }),
+          prisma.persona.findMany({
+            where: { organizationId: org.id },
+            orderBy: { name: "asc" },
+            select: { id: true, name: true, recipeType: true },
+          }),
+          prisma.orgSelectedPersona.findMany({
+            where: { organizationId: org.id },
+            select: { personaId: true },
+          }),
+          getTopicHealthEnrichment(org.id),
+          getTopicQueueStateEnrichment(org.id),
+          Promise.all([
+            prisma.backgroundJob.count({ where: { organizationId: org.id, status: "QUEUED" } }),
+            prisma.backgroundJob.count({ where: { organizationId: org.id, status: "PROCESSING" } }),
+          ]).then(([queued, processing]) => ({ queued, processing })),
+        ]);
+      jobStatus = jobCounts;
       topics = enrichTopicsWithQueueState(
-        enrichTopicsWithHealth(topicsData, healthEnrichment),
+        enrichTopicsWithHealth(topicsData, healthEnrichment, org.ingestCadence),
         queueStateEnrichment
       );
       personas = personasData;
+      selectedPersonaIds = orgSelectedData.map((o) => o.personaId);
     }
   }
+
+  const personaParam = typeof params.persona === "string" ? params.persona.trim() : undefined;
+  const viewPersona: "all" | string =
+    personaParam === "all"
+      ? "all"
+      : personaParam && selectedPersonaIds.includes(personaParam)
+        ? personaParam
+        : selectedPersonaIds[0] ?? "all";
+  const viewPersonaLabel =
+    viewPersona === "all" ? "All personas" : personas.find((p) => p.id === viewPersona)?.name ?? "All personas";
 
   const banner = typeof params.banner === "string" ? params.banner : null;
   const clearBannerHref = (() => {
     const q = new URLSearchParams();
     if (params.error) q.set("error", params.error);
     if (params.message) q.set("message", params.message);
+    if (personaParam) q.set("persona", personaParam);
     const s = q.toString();
     return "/app/articles" + (s ? "?" + s : "");
   })();
@@ -128,108 +158,56 @@ export default async function ArticlesPage({
   );
   const hasAnyArticles = allArticles.length > 0;
 
-  const now = new Date();
-  const systemHealth = await getSystemHealthSummary();
+  const ingestCard = orgId && org ? (
+    <IngestCardServer
+      organizationId={org.id}
+      topics={topics.map((t) => ({
+        id: t.id,
+        name: t.name,
+        query: t.query,
+        displayName: t.displayName ?? null,
+        searchPhrase: t.searchPhrase ?? null,
+        focusFilter: t.focusFilter ?? "ANY",
+        lastIngestAt: t.lastIngestAt ?? null,
+        nextRunAt: t.nextRunAt ?? null,
+        health: t.health,
+        lastIngestSuccessAt: t.lastIngestSuccessAt ?? null,
+        lastIngestFailureAt: t.lastIngestFailureAt ?? null,
+        articlesCount: t.articles.length,
+        queuedAt: t.queuedAt ?? null,
+        runningAt: t.runningAt ?? null,
+      }))}
+      personas={personas}
+      selectedPersonaIds={selectedPersonaIds}
+      orgCadence={org.ingestCadence}
+    />
+  ) : null;
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <PageHeader
-            title="Articles"
-            subtitle="Get the summary and the next steps in one place."
-          />
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
-            <span>Updated · {formatRelativeTime(now)}</span>
-            <span>
-              Cron ·{" "}
-              {systemHealth.lastCronRun
-                ? `${formatRelativeTime(systemHealth.lastCronRun.startedAt)} · ${systemHealth.lastCronRun.status}`
-                : "No runs yet"}
-            </span>
-            {systemHealth.cronFailedCount24h > 0 && (
-              <a
-                href="/app/observability"
-                className="inline-flex rounded-full bg-red-100 px-2 py-0.5 font-medium text-red-800 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-300 dark:hover:bg-red-900/60"
-              >
-                Cron failures (24h): {systemHealth.cronFailedCount24h}
-              </a>
-            )}
-            {systemHealth.jobFailedCount24h > 0 && (
-              <a
-                href="/app/observability"
-                className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:hover:bg-amber-900/60"
-              >
-                Job failures (24h): {systemHealth.jobFailedCount24h}
-              </a>
-            )}
-          </div>
+      {orgId && org && (
+        <div className="flex flex-wrap items-center gap-2">
+          <ExecuteDashboardButton initialStatus={jobStatus} />
+          <span className="text-xs text-zinc-500 dark:text-zinc-400">
+            Pull new articles, summarize, and generate actions in one go.
+          </span>
         </div>
-        {orgId && (
-          <IngestCardServer
-            topics={topics.map((t) => ({
-              id: t.id,
-              name: t.name,
-              query: t.query,
-              lastIngestAt: t.lastIngestAt ?? null,
-              cadence: t.cadence,
-              nextRunAt: t.nextRunAt ?? null,
-              recipeType: t.recipeType,
-              health: t.health,
-              lastIngestSuccessAt: t.lastIngestSuccessAt ?? null,
-              lastIngestFailureAt: t.lastIngestFailureAt ?? null,
-              articlesCount: t.articles.length,
-              queuedAt: t.queuedAt ?? null,
-              runningAt: t.runningAt ?? null,
-            }))}
-            personasCount={personas.length}
-          />
-        )}
-      </div>
+      )}
+      {ingestCard && (
+        <details className="group rounded-2xl border border-zinc-200 bg-zinc-50/50 dark:border-zinc-700 dark:bg-zinc-800/30">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-2xl px-4 py-3 text-left text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100/80 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-700/50 dark:hover:text-zinc-100 [&::-webkit-details-marker]:hidden">
+            <span>Setup: Topics & personas</span>
+            <span className="shrink-0 text-zinc-400 transition-transform group-open:rotate-180 dark:text-zinc-500" aria-hidden>
+              ▼
+            </span>
+          </summary>
+          <div className="border-t border-zinc-200 px-4 pb-4 pt-3 dark:border-zinc-700">
+            {ingestCard}
+          </div>
+        </details>
+      )}
 
       {banner && <Banner message={banner} clearHref={clearBannerHref} />}
-
-      {process.env.NODE_ENV !== "production" && orgId && (
-        <Card className="p-5 sm:p-6">
-          <h3 className="mb-3 text-sm font-medium text-zinc-900 dark:text-zinc-100">
-            Dev Tools
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            <form action={seedDevTopic}>
-              <button
-                type="submit"
-                className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100 active:scale-[0.98] dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200 dark:hover:bg-amber-900/40"
-              >
-                Create Dev Topic
-              </button>
-            </form>
-            <form action={enqueueIngestForDevTopic}>
-              <button
-                type="submit"
-                className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100 active:scale-[0.98] dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200 dark:hover:bg-amber-900/40"
-              >
-                Enqueue Ingest Job
-              </button>
-            </form>
-            <form action={runJobsNow}>
-              <button
-                type="submit"
-                className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100 active:scale-[0.98] dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200 dark:hover:bg-amber-900/40"
-              >
-                Run Jobs Now
-              </button>
-            </form>
-            <form action={runSchedulerNowDev}>
-              <button
-                type="submit"
-                className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100 active:scale-[0.98] dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200 dark:hover:bg-amber-900/40"
-              >
-                Run Scheduler Now (Dev)
-              </button>
-            </form>
-          </div>
-        </Card>
-      )}
 
       {params.error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm leading-relaxed text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
@@ -237,16 +215,10 @@ export default async function ArticlesPage({
         </div>
       )}
 
-      {params.message && (
-        <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm leading-relaxed text-green-800 dark:border-green-900/40 dark:bg-green-950/30 dark:text-green-200">
-          {params.message}
-        </div>
-      )}
-
       {!orgId && (
         <Card className="p-5 sm:p-6">
           <p className="text-sm text-amber-800 dark:text-amber-200">
-            No organization selected. Use the organization switcher above.
+            Select an organization above to see articles.
           </p>
         </Card>
       )}
@@ -257,157 +229,182 @@ export default async function ArticlesPage({
             No articles yet
           </p>
           <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-500">
-            Run a topic above to ingest the latest results.
+            Add topics and run ingest to pull in articles. Open <strong>Setup</strong> below to get started.
           </p>
         </Card>
       )}
 
       {orgId && hasAnyArticles && (
-        <ul className="space-y-4">
-          {allArticles.map((a) => (
-            <li key={a.id}>
-              <Card className="overflow-hidden p-5 sm:p-6">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <a
-                    href={a.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-semibold text-zinc-900 hover:underline dark:text-zinc-100"
-                  >
-                    {a.title}
-                  </a>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
-                      {a.topicName}
-                    </span>
-                  </div>
-                </div>
-                <p className="mt-1 truncate text-xs text-zinc-500 dark:text-zinc-400">
-                  Added · {formatRelativeTime(a.createdAt)}
-                  {a.publishedAt != null && (
-                    <> · Published · {formatRelativeTime(a.publishedAt)}</>
-                  )}
-                </p>
+        <>
+          {personas.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <FeedPersonaSwitcher
+                personas={personas}
+                selectedPersonaIds={selectedPersonaIds}
+                currentView={viewPersona}
+                searchParams={{
+                  ...(params.error && { error: params.error }),
+                  ...(params.message && { message: params.message }),
+                  ...(params.banner && { banner: params.banner }),
+                }}
+              />
+            </div>
+          )}
 
-                <div className="mt-4 flex flex-wrap items-center gap-4 text-xs">
-                  <span className="flex items-center gap-1.5">
-                    <span
-                      className={`h-2 w-2 rounded-full ${
-                        a.summary ? "bg-green-500" : "bg-zinc-300 dark:bg-zinc-600"
-                      }`}
-                      aria-hidden
-                    />
-                    Summary
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span
-                      className={`h-2 w-2 rounded-full ${
-                        a._count.actionItems > 0
-                          ? "bg-green-500"
-                          : "bg-zinc-300 dark:bg-zinc-600"
-                      }`}
-                      aria-hidden
-                    />
-                    Actions {a._count.actionItems}
-                  </span>
-                </div>
-
-                <div className="mt-4 space-y-2 border-t border-zinc-100/80 pt-4 dark:border-zinc-700">
-                  <p className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                    Quick summary
-                  </p>
-                  {a.summary ? (
-                    <div className="text-sm leading-6 text-zinc-700 dark:text-zinc-300">
-                      <ClampText text={a.summary} lines={3} preserveNewlines />
+          <ul className="space-y-4">
+            {allArticles.map((a) => {
+              const filteredActions =
+                viewPersona === "all"
+                  ? a.actionItems
+                  : a.actionItems.filter(
+                      (ai) => ai.persona?.id === viewPersona
+                    );
+              return (
+                <li key={a.id}>
+                  <Card className="overflow-hidden p-5 sm:p-6">
+                    {/* Article header */}
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <a
+                        href={a.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="min-w-0 flex-1 font-semibold text-zinc-900 hover:underline dark:text-zinc-100 line-clamp-2"
+                        title={a.title}
+                      >
+                        {a.title}
+                      </a>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span
+                          className="max-w-[140px] truncate rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
+                          title={a.topicName}
+                        >
+                          {a.topicName}
+                        </span>
+                      </div>
                     </div>
-                  ) : (
-                    <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
-                      <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                        Summary pending.
-                      </p>
-                      <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-500">
-                        Click Summarize to scan.
-                      </p>
-                    </div>
-                  )}
-                </div>
+                    <p className="mt-1 truncate text-xs text-zinc-500 dark:text-zinc-400">
+                      Added {formatRelativeTime(a.createdAt)}
+                      {a.publishedAt != null && (
+                        <> / Published {formatRelativeTime(a.publishedAt)}</>
+                      )}
+                    </p>
 
-                <div className="mt-4 space-y-2 border-t border-zinc-100/80 pt-4 dark:border-zinc-700">
-                  <p className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                    Next steps
-                  </p>
-                  {a.actionItems.length > 0 ? (
-                    <>
-                      <ul className="space-y-2 text-sm">
-                        {a.actionItems.slice(0, 5).map((ai, i) => {
-                          const [titlePart, ...rest] = ai.text.split(":");
-                          const title = titlePart?.trim() ?? ai.text;
-                          const description =
-                            rest.length > 0 ? rest.join(":").trim() : null;
-                          return (
-                            <li
-                                key={i}
-                                className="rounded-xl border border-zinc-100 px-3 py-2 dark:border-zinc-700"
-                              >
-                              <span
-                                className="block truncate font-medium text-zinc-900 dark:text-zinc-100"
-                                title={title}
-                              >
-                                {title}
-                              </span>
-                              {description && (
-                                <div className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-400">
-                                  <ClampText
-                                    text={description}
-                                    lines={2}
-                                    moreLabel="Read more"
-                                    lessLabel="Show less"
-                                  />
-                                </div>
-                              )}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                      {a.actionItems.length > 5 && (
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                          +{a.actionItems.length - 5} more
+                    {/* Summary and Actions side by side */}
+                    <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-stretch">
+                      {/* Summary box */}
+                      <div className="min-w-0 flex-1 rounded-xl border border-zinc-200 bg-zinc-50/50 p-4 dark:border-zinc-700 dark:bg-zinc-800/30">
+                        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                          Summary
+                        </p>
+                        {a.summary ? (
+                          <div className="text-sm leading-6 text-zinc-700 dark:text-zinc-300">
+                            <ClampText text={a.summary} lines={4} preserveNewlines />
+                          </div>
+                        ) : (
+                          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                            No summary yet. Use Execute at the top to generate.
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Actions box (filtered by view persona) */}
+                      <div className="min-w-0 flex-1 rounded-xl border border-zinc-200 bg-zinc-50/50 p-4 dark:border-zinc-700 dark:bg-zinc-800/30">
+                      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                        Actions {viewPersona === "all" ? "(all personas)" : `for ${viewPersonaLabel}`}
+                      </p>
+                      {filteredActions.length > 0 ? (
+                        <>
+                          <ul className="space-y-2 text-sm">
+                            {filteredActions.map((ai) => {
+                              const [titlePart, ...rest] = ai.text.split(":");
+                              const title = titlePart?.trim() ?? ai.text;
+                              const description =
+                                rest.length > 0 ? rest.join(":").trim() : null;
+                              const isOpen = ai.status === "OPEN";
+                              return (
+                                <li
+                                  key={ai.id}
+                                  className="flex flex-wrap items-start justify-between gap-2 rounded-xl border border-zinc-100 px-3 py-2 dark:border-zinc-700"
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <span
+                                      className="block truncate font-medium text-zinc-900 dark:text-zinc-100"
+                                      title={title}
+                                    >
+                                      {title}
+                                    </span>
+                                    {description && (
+                                      <div className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-400">
+                                        <ClampText
+                                          text={description}
+                                          lines={2}
+                                          moreLabel="Read more"
+                                          lessLabel="Show less"
+                                        />
+                                      </div>
+                                    )}
+                                    {viewPersona === "all" && ai.persona?.name && (
+                                      <span className="mt-1 inline-block rounded-full bg-zinc-200 px-2 py-0.5 text-[10px] font-medium text-zinc-600 dark:bg-zinc-600 dark:text-zinc-300">
+                                        {ai.persona.name}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex shrink-0 items-center gap-2">
+                                    <span
+                                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                                        ai.status === "OPEN"
+                                          ? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+                                          : ai.status === "DONE"
+                                            ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200"
+                                            : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                                      }`}
+                                    >
+                                      {ai.status === "OPEN"
+                                        ? "Open"
+                                        : ai.status === "DONE"
+                                          ? "Done"
+                                          : "Dismissed"}
+                                    </span>
+                                    {isOpen && (
+                                      <form action={setActionItemStatus} className="inline-flex">
+                                        <input type="hidden" name="id" value={ai.id} />
+                                        <input type="hidden" name="status" value="DONE" />
+                                        {viewPersona && (
+                                          <input type="hidden" name="persona" value={viewPersona} />
+                                        )}
+                                        <button
+                                          type="submit"
+                                          className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                                        >
+                                          Mark done
+                                        </button>
+                                      </form>
+                                    )}
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                          <a
+                            href="/app/admin/actions"
+                            className="mt-3 inline-block text-sm font-medium text-zinc-900 underline hover:no-underline dark:text-zinc-100"
+                          >
+                            View all actions
+                          </a>
+                        </>
+                      ) : (
+                        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                          No action items yet for this view. Use Execute at the top to generate.
                         </p>
                       )}
-                      <a
-                        href="/app/actions"
-                        className="inline-block text-sm font-medium text-zinc-900 underline hover:no-underline dark:text-zinc-100"
-                      >
-                        View all actions
-                      </a>
-                    </>
-                  ) : (
-                    <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
-                      <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                        No actions yet — generate when ready.
-                      </p>
-                      <form action={generateActions} className="mt-3">
-                        <input type="hidden" name="articleId" value={a.id} />
-                        <ArticleGenerateButton />
-                      </form>
+                      </div>
                     </div>
-                  )}
-                </div>
-
-                <div className="mt-4 flex flex-wrap items-center justify-end gap-3 border-t border-zinc-100/80 pt-4 dark:border-zinc-700">
-                  <form action={summarizeArticle} className="inline-flex">
-                    <input type="hidden" name="articleId" value={a.id} />
-                    <ArticleSummarizeButton />
-                  </form>
-                  <form action={generateActions} className="inline-flex">
-                    <input type="hidden" name="articleId" value={a.id} />
-                    <ArticleGenerateButton />
-                  </form>
-                </div>
-              </Card>
-            </li>
-          ))}
-        </ul>
+                  </Card>
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
     </div>
   );

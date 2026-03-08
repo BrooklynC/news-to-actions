@@ -22,7 +22,7 @@ All work that **must be done in or for Production**. Use this as the single plac
 | ☐ | Cron 401 without secret, 200 with secret (curl in prod) | docs/phase2-production-checklist.md, SYSTEM_STATE |
 | ☐ | Overlap guard validated in prod (CronLock row test) | ROADMAP Phase 2 |
 | ☐ | Notification dedupe validated in production | ROADMAP Phase 2 |
-| ☐ | JobRun metrics visible in prod /app/observability | ROADMAP Phase 2 |
+| ☐ | JobRun metrics visible in prod (Admin → Jobs) | ROADMAP Phase 2 |
 | ☐ | CRON_DISABLED=1 verified in prod (cron skips, log shows cron.disabled) | ROADMAP Phase 2 |
 
 ---

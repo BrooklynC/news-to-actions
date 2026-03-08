@@ -24,7 +24,7 @@ export async function ActionItemAudit({
 
   if (audits.length === 0) {
     return (
-      <p className="text-xs text-zinc-500 dark:text-zinc-400">No history yet.</p>
+      <p className="text-xs text-zinc-500 dark:text-zinc-400">No changes yet.</p>
     );
   }
 

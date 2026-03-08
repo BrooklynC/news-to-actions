@@ -86,7 +86,9 @@ export async function enqueueDueTopicIngestion(
 
   const where = {
     isIngestionEnabled: true,
-    cadence: { in: [TopicCadence.HOURLY, TopicCadence.DAILY] }, // Excludes MANUAL at DB level
+    organization: {
+      ingestCadence: { in: [TopicCadence.HOURLY, TopicCadence.DAILY] },
+    },
     OR: [{ nextRunAt: null }, { nextRunAt: { lte: now } }],
     ...(params.organizationId ? { organizationId: params.organizationId } : {}),
   };
@@ -98,7 +100,7 @@ export async function enqueueDueTopicIngestion(
     select: {
       id: true,
       organizationId: true,
-      cadence: true,
+      organization: { select: { ingestCadence: true } },
     },
   });
 
@@ -127,7 +129,8 @@ export async function enqueueDueTopicIngestion(
       if (totalProcessed >= globalLimit) break;
       totalProcessed++;
 
-      const suffix = buildCadenceKeySuffix(topic.cadence, now);
+      const cadence = topic.organization.ingestCadence;
+      const suffix = buildCadenceKeySuffix(cadence, now);
       const idempotencyKey = `INGEST_TOPIC:${topic.id}:${suffix}`;
 
       const existingJob = await prisma.backgroundJob.findFirst({
@@ -151,7 +154,7 @@ export async function enqueueDueTopicIngestion(
         enqueued++;
       }
 
-      const nextRunAt = computeNextRunAt(topic.cadence, now);
+      const nextRunAt = computeNextRunAt(cadence, now);
       await prisma.topic.updateMany({
         where: { id: topic.id, organizationId: topic.organizationId },
         data: { nextRunAt },

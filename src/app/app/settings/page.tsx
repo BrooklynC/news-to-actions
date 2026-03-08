@@ -1,0 +1,72 @@
+import { Card } from "@/components/ui/Card";
+import { PageHeader } from "@/components/ui/PageHeader";
+import {
+  getOrgIngestCadence,
+  getOrgActionItemsPerPersona,
+  updateOrgIngestCadence,
+  updateOrgActionItemsPerPersona,
+} from "./actions";
+import { CadenceForm } from "./CadenceForm";
+import { ActionItemsPerPersonaForm } from "./ActionItemsPerPersonaForm";
+import { getNotificationSettings } from "./notifications/actions";
+import { NotificationSettingsForm } from "./notifications/NotificationSettingsForm";
+
+export default async function SettingsPage() {
+  const [cadenceData, actionItemsData, notificationSettings] = await Promise.all([
+    getOrgIngestCadence(),
+    getOrgActionItemsPerPersona(),
+    getNotificationSettings(),
+  ]);
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Settings"
+        subtitle="Organization-wide preferences."
+      />
+
+      {!cadenceData ? (
+        <Card className="p-5">
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            Select an organization above to change settings.
+          </p>
+        </Card>
+      ) : (
+        <Card className="p-5 sm:p-6 space-y-6">
+          <div>
+            <h2 className="mb-3 text-sm font-medium text-zinc-900 dark:text-zinc-100">
+              Refresh cadence
+            </h2>
+            <CadenceForm
+              initialCadence={cadenceData.ingestCadence}
+              formAction={updateOrgIngestCadence}
+            />
+          </div>
+          {actionItemsData && (
+            <div className="border-t border-zinc-200 pt-4 dark:border-zinc-700">
+              <h2 className="mb-3 text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                Action items per persona per article
+              </h2>
+              <ActionItemsPerPersonaForm
+                initialValue={actionItemsData.actionItemsPerPersonaPerArticle}
+                formAction={updateOrgActionItemsPerPersona}
+              />
+            </div>
+          )}
+        </Card>
+      )}
+
+      {notificationSettings && (
+        <Card className="p-5 sm:p-6">
+          <h2 className="mb-3 text-sm font-medium text-zinc-900 dark:text-zinc-100">
+            Notifications
+          </h2>
+          <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
+            Slack and email. Delivery is not enabled yet.
+          </p>
+          <NotificationSettingsForm initial={notificationSettings} />
+        </Card>
+      )}
+    </div>
+  );
+}

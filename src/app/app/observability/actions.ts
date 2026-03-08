@@ -37,7 +37,7 @@ async function getOrgId(): Promise<string | null> {
   return org?.id ?? null;
 }
 
-const OBSERVABILITY = "/app/observability";
+const OBSERVABILITY = "/app/admin/jobs";
 
 export async function getAiCostReport(period: "24h" | "7d"): Promise<CostReport | null> {
   const orgId = await getOrgId();
@@ -312,6 +312,45 @@ export async function requeueDeadJob(formData: FormData) {
   redirect(`${OBSERVABILITY}?message=` + encodeURIComponent("Job requeued."));
 }
 
+/** Cancel a dead-letter job: removes it from the list (deletes the job record). */
+export async function cancelDeadJob(formData: FormData) {
+  const { requireOrgAndUser } = await import("@/lib/auth");
+  const { redirect } = await import("next/navigation");
+
+  const authResult = await requireOrgAndUser().catch(() => null);
+  if (!authResult) {
+    redirect(`${OBSERVABILITY}?error=` + encodeURIComponent("No organization selected."));
+    return;
+  }
+  const { organizationId, userId } = authResult;
+
+  const rawJobId = (formData.get("jobId") as string)?.trim() ?? "";
+  if (!rawJobId) {
+    redirect(`${OBSERVABILITY}?error=` + encodeURIComponent("jobId is required."));
+    return;
+  }
+
+  const job = await prisma.backgroundJob.findFirst({
+    where: { id: rawJobId, organizationId, status: "DEAD" },
+    select: { id: true, type: true },
+  });
+  if (!job) {
+    redirect(`${OBSERVABILITY}?error=` + encodeURIComponent("Dead job not found."));
+    return;
+  }
+
+  await prisma.backgroundJob.delete({ where: { id: job.id } });
+
+  log.info("job.canceled", "Dead job canceled (deleted)", {
+    organizationId,
+    jobId: job.id,
+    jobType: job.type,
+    meta: { actorUserId: userId, source: "ui" },
+  });
+
+  redirect(`${OBSERVABILITY}?message=` + encodeURIComponent("Job canceled."));
+}
+
 export type RecentJobRun = {
   id: string;
   jobType: string;
@@ -494,7 +533,7 @@ export async function getObservabilitySnapshot(): Promise<ObservabilitySnapshot>
       prisma.backgroundJobRun.findMany({
         where: { organizationId: orgId },
         orderBy: { createdAt: "desc" },
-        take: 20,
+        take: 50,
         select: {
           id: true,
           createdAt: true,

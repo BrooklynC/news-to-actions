@@ -1,5 +1,8 @@
 /**
  * Dev-only env helpers. Safe in production (returns null / no-op).
+ *
+ * AI API key (validated at use site):
+ * - ANTHROPIC_API_KEY — used by src/lib/ai/anthropic.ts
  */
 import dotenv from "dotenv";
 
@@ -76,4 +79,16 @@ export function getExportStorageBaseDir(): string {
   const v = process.env.EXPORT_STORAGE_BASE_DIR;
   const trimmed = typeof v === "string" ? v.trim() : "";
   return trimmed || EXPORT_STORAGE_BASE_DIR_DEFAULT;
+}
+
+/** ANTHROPIC_API_KEY — required for Anthropic Claude (summarize, generate actions). */
+export function getAnthropicApiKey(): string | null {
+  if (!devEnvLoaded && process.env.NODE_ENV !== "production") {
+    dotenv.config({ path: ".env" });
+    dotenv.config({ path: ".env.local" });
+    devEnvLoaded = true;
+  }
+  const v = process.env.ANTHROPIC_API_KEY;
+  const trimmed = typeof v === "string" ? v.trim() : "";
+  return trimmed || null;
 }

@@ -240,6 +240,15 @@ export async function GET(request: NextRequest) {
           },
         });
 
+        const queuedRemaining = await prisma.backgroundJob.count({
+          where: { organizationId: orgId, status: "QUEUED" },
+        });
+        if (queuedRemaining > 0) {
+          const baseUrl = new URL(request.url).origin;
+          const chainUrl = `${baseUrl}/api/cron/run-jobs?secret=${encodeURIComponent(cronSecret!)}&orgId=${encodeURIComponent(orgId)}&limit=${limit}`;
+          fetch(chainUrl, { method: "GET" }).catch(() => {});
+        }
+
         return NextResponse.json({
           ok: true,
           mode: "single-org",

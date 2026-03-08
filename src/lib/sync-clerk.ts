@@ -1,4 +1,5 @@
 import { clerkClient } from "@clerk/nextjs/server";
+import { cookies } from "next/headers";
 import type { AuthContext } from "./auth";
 import { prisma } from "./db";
 
@@ -37,6 +38,9 @@ export async function syncDbWithClerk(ctx: AuthContext): Promise<SyncResult> {
       update: { name: orgName },
     });
 
+    const cookieStore = await cookies();
+    const signupAsAdmin = cookieStore.get("signup_as_admin")?.value === "1";
+
     await prisma.membership.upsert({
       where: {
         userId_organizationId: {
@@ -47,10 +51,14 @@ export async function syncDbWithClerk(ctx: AuthContext): Promise<SyncResult> {
       create: {
         userId: dbUser.id,
         organizationId: dbOrg.id,
-        role: "member",
+        role: signupAsAdmin ? "admin" : "member",
       },
-      update: { role: "member" },
+      update: signupAsAdmin ? { role: "admin" } : {},
     });
+
+    if (signupAsAdmin) {
+      cookieStore.delete("signup_as_admin");
+    }
 
     return { success: true, dbUserId: dbUser.id };
   } catch {

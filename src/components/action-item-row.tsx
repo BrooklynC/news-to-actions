@@ -26,6 +26,8 @@ type ActionItemRowProps = {
   articleTitle?: string | null;
   /** Optional: History content (e.g. ActionItemAudit) rendered by parent in Server tree */
   children?: React.ReactNode;
+  /** If true, show Assignee dropdown (admin only can reassign). Default false. */
+  canReassign?: boolean;
 };
 
 export function ActionItemRow({
@@ -35,6 +37,7 @@ export function ActionItemRow({
   updateActionItem,
   articleTitle,
   children,
+  canReassign = false,
 }: ActionItemRowProps) {
   const [editing, setEditing] = useState(false);
 
@@ -75,10 +78,9 @@ export function ActionItemRow({
                 defaultValue={item.status}
                 className="rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
               >
-                <option value="OPEN">OPEN</option>
-                <option value="IN_PROGRESS">IN_PROGRESS</option>
-                <option value="DONE">DONE</option>
-                <option value="DISMISSED">DISMISSED</option>
+                <option value="OPEN">Open</option>
+                <option value="DONE">Done</option>
+                <option value="DISMISSED">Dismissed</option>
               </select>
             </div>
             <div>
@@ -119,21 +121,23 @@ export function ActionItemRow({
                 ))}
               </select>
             </div>
-            <div>
-              <label className="mb-1 block text-xs text-zinc-400">Assignee</label>
-              <select
-                name="assigneeUserId"
-                defaultValue={item.assigneeUserId ?? ""}
-                className="rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
-              >
-                <option value="">—</option>
-                {members.map((m) => (
-                  <option key={m.user.id} value={m.user.id}>
-                    {m.user.email ?? m.user.id}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {canReassign && (
+              <div>
+                <label className="mb-1 block text-xs text-zinc-400">Assignee</label>
+                <select
+                  name="assigneeUserId"
+                  defaultValue={item.assigneeUserId ?? ""}
+                  className="rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+                >
+                  <option value="">—</option>
+                  {members.map((m) => (
+                    <option key={m.user.id} value={m.user.id}>
+                      {m.user.email ?? m.user.id}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
           <div className="flex gap-2">
             <button
@@ -172,7 +176,10 @@ export function ActionItemRow({
                 </div>
               )}
               {articleTitle != null && (
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                <p
+                  className="max-w-full truncate text-xs text-zinc-500 dark:text-zinc-400"
+                  title={articleTitle}
+                >
                   {articleTitle}
                 </p>
               )}
@@ -182,14 +189,16 @@ export function ActionItemRow({
                 className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors duration-150 ${
                   item.status === "OPEN"
                     ? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
-                    : item.status === "IN_PROGRESS"
-                      ? "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200"
-                      : item.status === "DONE"
-                        ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200"
-                        : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                    : item.status === "DONE"
+                      ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200"
+                      : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
                 }`}
               >
-                {item.status}
+                {item.status === "OPEN"
+                  ? "Open"
+                  : item.status === "DONE"
+                    ? "Done"
+                    : "Dismissed"}
               </span>
               {(personas.find((p) => p.id === item.personaId)?.name ?? null) && (
                 <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700 transition-colors duration-150 dark:bg-zinc-800 dark:text-zinc-400">

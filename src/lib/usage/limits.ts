@@ -76,7 +76,7 @@ export type TokenUsage = {
   model: string;
 };
 
-/** Update a usage event with token counts after the OpenAI call. */
+/** Update a usage event with token counts after the AI call. */
 export async function updateUsageEventTokens(
   usageEventId: string,
   data: TokenUsage

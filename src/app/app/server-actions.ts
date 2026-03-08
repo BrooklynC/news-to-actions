@@ -16,7 +16,7 @@ function isPrismaP2002(e: unknown): boolean {
   return o.code === "P2002" && o.name === "PrismaClientKnownRequestError";
 }
 const ARTICLES = "/app/articles";
-const ACTIONS = "/app/actions";
+const ACTIONS = "/app/admin/actions";
 
 export async function createTopic(formData: FormData) {
   const { orgId: clerkOrgId } = await auth();
@@ -98,6 +98,7 @@ export async function fetchArticlesForTopic(formData: FormData) {
           topicId: topic.id,
           title: item.title,
           url: item.url,
+          rssSnippet: item.snippet,
           ...(item.publishedAt && { publishedAt: item.publishedAt }),
         },
       });

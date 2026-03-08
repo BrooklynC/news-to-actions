@@ -5,9 +5,12 @@ import { redirect } from "next/navigation";
 import { executeGenerateActionsForArticle } from "@/lib/domain/generateActions";
 import { executeSummarizeArticle } from "@/lib/domain/summarize";
 import { prisma } from "@/lib/db";
+import { requireOrgAndUser } from "@/lib/auth";
 import { safeAction } from "@/lib/server/safeAction";
 
 const ARTICLES = "/app/articles";
+
+const ALLOWED_STATUS = ["OPEN", "DONE", "DISMISSED"] as const;
 
 async function getOrgAndRedirect() {
   const { orgId: clerkOrgId } = await auth();
@@ -79,4 +82,38 @@ export async function generateActions(formData: FormData) {
     }
     redirect(`${ARTICLES}?message=` + encodeURIComponent("Actions created successfully."));
   });
+}
+
+/** Updates only action item status; redirects back to articles feed with persona param. */
+export async function setActionItemStatus(formData: FormData) {
+  let organizationId: string;
+  try {
+    const auth = await requireOrgAndUser();
+    organizationId = auth.organizationId;
+  } catch {
+    redirect(`${ARTICLES}?error=` + encodeURIComponent("No organization selected."));
+  }
+
+  const id = (formData.get("id") ?? formData.get("actionId") ?? "").toString().trim();
+  const status = (formData.get("status") as string)?.trim();
+  const personaParam = (formData.get("persona") as string)?.trim() || undefined;
+
+  if (!id || !status || !ALLOWED_STATUS.includes(status as (typeof ALLOWED_STATUS)[number]))
+    redirect(`${ARTICLES}?error=` + encodeURIComponent("Invalid input."));
+
+  const existing = await prisma.actionItem.findFirst({
+    where: { id, organizationId },
+    select: { id: true, status: true },
+  });
+  if (!existing)
+    redirect(`${ARTICLES}?error=` + encodeURIComponent("Action item not found."));
+
+  await prisma.actionItem.update({
+    where: { id },
+    data: { status: status as "OPEN" | "DONE" | "DISMISSED" },
+  });
+
+  const q = new URLSearchParams();
+  if (personaParam) q.set("persona", personaParam);
+  redirect(ARTICLES + (q.toString() ? "?" + q.toString() : ""));
 }

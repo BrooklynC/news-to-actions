@@ -3,7 +3,7 @@
  * Throws on failure; used by both server action (wraps with redirect) and job runner.
  */
 import { prisma } from "@/lib/db";
-import { getOpenAIClient } from "@/lib/openai";
+import { getAnthropicClient, ANTHROPIC_MODEL } from "@/lib/ai/anthropic";
 import { log } from "@/lib/observability/logger";
 import { checkAndRecordAiUsage, updateUsageEventTokens } from "@/lib/usage/limits";
 
@@ -13,7 +13,7 @@ export async function executeSummarizeArticle(
 ): Promise<void> {
   const article = await prisma.article.findFirst({
     where: { id: articleId, organizationId },
-    select: { id: true, title: true, url: true, summary: true },
+    select: { id: true, title: true, url: true, rssSnippet: true, summary: true },
   });
   if (!article) throw new Error("Article not found");
 
@@ -25,14 +25,16 @@ export async function executeSummarizeArticle(
   if (!limit.ok) throw new Error(limit.message);
   const usageEventId = limit.usageEventId;
 
-  const content = [article.title, article.url, article.summary]
+  const body = article.rssSnippet ?? article.summary ?? "";
+  const content = [article.title, article.url, body]
     .filter(Boolean)
     .join("\n\n");
 
-  let completion;
+  let response;
   try {
-    completion = await getOpenAIClient().chat.completions.create({
-      model: "gpt-4o-mini",
+    response = await getAnthropicClient().messages.create({
+      model: ANTHROPIC_MODEL,
+      max_tokens: 1024,
       messages: [
         {
           role: "user",
@@ -47,25 +49,27 @@ export async function executeSummarizeArticle(
       "status" in error &&
       (error as { status: number }).status === 429
     ) {
-      throw new Error("OpenAI quota exceeded. Please check billing.");
+      throw new Error("AI quota exceeded. Please check billing.");
     }
-    log.error("summarize.openai_error", "OpenAI request failed", {
+    log.error("summarize.ai_error", "AI request failed", {
       organizationId,
-      articleId,
+      meta: { articleId },
       err: error,
     });
     throw new Error("AI request failed. Check server logs.");
   }
 
-  const raw = completion.choices[0]?.message?.content ?? "";
+  const firstBlock = response.content[0];
+  const raw =
+    firstBlock && firstBlock.type === "text" ? firstBlock.text : "";
   if (!raw.trim())
     throw new Error("AI returned an empty response. Try again.");
 
-  if (usageEventId && completion.usage) {
+  if (usageEventId && response.usage) {
     await updateUsageEventTokens(usageEventId, {
-      inputTokens: completion.usage.prompt_tokens ?? 0,
-      outputTokens: completion.usage.completion_tokens ?? 0,
-      model: completion.model ?? "gpt-4o-mini",
+      inputTokens: response.usage.input_tokens ?? 0,
+      outputTokens: response.usage.output_tokens ?? 0,
+      model: ANTHROPIC_MODEL,
     });
   }
 

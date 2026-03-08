@@ -7,7 +7,8 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { enforceCaps } from "@/lib/guardrails/caps";
 import { log } from "@/lib/observability/logger";
-import { fetchGoogleNewsRss } from "@/lib/rss";
+import { buildRssSearchUrl } from "@/lib/topics/buildRssQuery";
+import { fetchRssByUrl, fetchGoogleNewsRss } from "@/lib/rss";
 
 function isPrismaP2002(e: unknown): e is Prisma.PrismaClientKnownRequestError {
   if (!e || typeof e !== "object") return false;
@@ -26,11 +27,21 @@ export async function executeIngestTopic(
 ): Promise<IngestTopicResult> {
   const topic = await prisma.topic.findFirst({
     where: { id: topicId, organizationId },
-    select: { id: true, query: true },
+    select: { id: true, query: true, searchPhrase: true, focusFilter: true },
   });
   if (!topic) throw new Error("Topic not found");
 
-  const items = await fetchGoogleNewsRss(topic.query, 5);
+  let items: Awaited<ReturnType<typeof fetchRssByUrl>>;
+  if (topic.searchPhrase != null && topic.searchPhrase.trim() !== "") {
+    items = await fetchRssByUrl(buildRssSearchUrl(topic.searchPhrase.trim(), topic.focusFilter), 5);
+  } else {
+    log.warn(
+      "topic.query.missing",
+      "Topic missing searchPhrase, falling back to legacy query",
+      { organizationId, meta: { topicId } }
+    );
+    items = await fetchGoogleNewsRss(topic.query, 5);
+  }
   let createdArticlesCount = 0;
   let dedupedArticlesCount = 0;
 
@@ -50,6 +61,7 @@ export async function executeIngestTopic(
           topicId: topic.id,
           title: item.title,
           url: item.url,
+          rssSnippet: item.snippet,
           ...(item.publishedAt && { publishedAt: item.publishedAt }),
         },
       });

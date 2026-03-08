@@ -10,13 +10,13 @@ export default async function NotificationSettingsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Notification settings"
-        subtitle="Slack and email preferences. Delivery not enabled yet."
+        subtitle="Configure how you’d like to be notified (Slack and email). Delivery is not enabled yet."
       />
 
       {!settings ? (
         <Card className="p-5">
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            No organization selected. Use the switcher above.
+            Select an organization above to manage notifications.
           </p>
         </Card>
       ) : (

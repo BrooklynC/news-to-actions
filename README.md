@@ -33,7 +33,7 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 
 | Variable       | Description                                                                 |
 |----------------|-----------------------------------------------------------------------------|
-| `DATABASE_URL` | PostgreSQL URL (pooled). For Neon, use the connection string with `-pooler` in the host. |
+| `DATABASE_URL` | PostgreSQL URL (pooled). For Neon, use the connection string with `-pooler` in the host. **Recommended:** append `?connection_limit=1` (or `&connection_limit=1` if the URL already has query params) to avoid connection pool exhaustion in serverless. |
 | `DIRECT_URL`   | Direct PostgreSQL URL for Prisma migrate (no pooler). Required for Neon to avoid P1002. Same as `DATABASE_URL` but host without `-pooler`. |
 | `CRON_SECRET`  | Secret for authenticating cron job requests. Required for `/api/cron/run-jobs`. Generate with `openssl rand -hex 32`. |
 
@@ -55,7 +55,7 @@ curl -H "x-cron-secret: <your-secret>" "http://localhost:3000/api/cron/run-jobs?
 
 ## Infra decisions
 
-- **DB:** PostgreSQL (Neon). Use pooled `DATABASE_URL` for the app; use direct `DIRECT_URL` (no `-pooler`) for `prisma migrate` to avoid advisory lock timeouts.
+- **DB:** PostgreSQL (Neon). Use pooled `DATABASE_URL` for the app; use direct `DIRECT_URL` (no `-pooler`) for `prisma migrate` to avoid advisory lock timeouts. Add `connection_limit=1` to `DATABASE_URL` in serverless to avoid pool exhaustion.
 - **Auth:** Clerk (org + user). Cron is secret-gated only, not Clerk-gated.
 - **Background jobs:** Prisma + `BackgroundJob` table; cron route `/api/cron/run-jobs` processes QUEUED jobs with overlap guard and per-org caps. See ROADMAP.md and docs in `docs/`.
 - **AI:** OpenAI (summarize, generate-actions). Usage and token tracking in `UsageEvent`; cost visibility on Observability page.
