@@ -164,16 +164,17 @@ export default async function AdminJobsPage() {
               No runs yet.
             </p>
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-500">
-              Jobs run on a schedule, or run them now from the Articles page.
+              First run Execute on Articles to queue jobs, then run them here (or they run via cron every 5 min).
             </p>
-            <form action={runMyOrgJobs} className="mt-4">
-              <RunJobsNowButton />
-            </form>
+            <div className="mt-4">
+              <RunJobsNowButton action={() => runMyOrgJobs(10)} />
+            </div>
           </div>
         </Card>
       ) : (
-        <RecentJobRunsTable
-          runs={recentRuns.map((r) => ({
+        <>
+          <RecentJobRunsTable
+            runs={recentRuns.map((r) => ({
             id: r.id,
             createdAt: r.createdAt,
             jobType: r.jobType,
@@ -183,7 +184,11 @@ export default async function AdminJobsPage() {
             articleId: r.articleId,
             startedAt: r.startedAt,
           }))}
-        />
+          />
+          <div className="mt-4">
+            <RunJobsNowButton action={() => runMyOrgJobs(10)} />
+          </div>
+        </>
       )}
 
       {/* Job Metrics - re-use same structure as observability page, abbreviated here for length. Copy from observability page from line 265 to 579 (Job Metrics through Dead letters card), then Topic health and Back link. */}
