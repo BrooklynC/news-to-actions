@@ -83,7 +83,7 @@ All work that **must be done in or for Production**. Use this as the single plac
    curl -s -w "\n%{http_code}" "https://YOUR_VERCEL_URL/api/cron/run-jobs?secret=YOUR_CRON_SECRET&limit=1"
    ```
 
-5. **Configure Vercel Cron** (optional): In vercel.json, add a cron job to hit `/api/cron/run-jobs` with `x-cron-secret` header or `?secret=` query param on your preferred schedule (e.g. every 5 minutes).
+5. **Configure Vercel Cron** (optional): `vercel.json` already defines a cron that hits `/api/cron/run-jobs` every 5 minutes. Vercel automatically adds `Authorization: Bearer <CRON_SECRET>` when invoking cron, so ensure `CRON_SECRET` is set in Vercel Project → Settings → Environment Variables (Production).
 
 ---
 
