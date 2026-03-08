@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 
 type Props = {
-  action: () => Promise<void>;
+  action: (limit?: number) => Promise<void>;
 };
 
 export function RunJobsNowButton({ action }: Props) {
@@ -11,7 +11,7 @@ export function RunJobsNowButton({ action }: Props) {
 
   const handleClick = () => {
     startTransition(async () => {
-      await action();
+      await action(10);
     });
   };
 
