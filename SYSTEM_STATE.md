@@ -1,6 +1,6 @@
 # SYSTEM_STATE.md
 
-*Last Updated: Feb 24, 2026*
+*Last Updated: Feb 21, 2026*
 
 This document is the canonical, repo-backed source of truth for the actual implemented state of the News Actions system.
 
@@ -603,6 +603,33 @@ Checkbox updates go in ROADMAP.md; verification evidence belongs in this documen
 
 ---
 
+## Verification Log — Feb 21, 2026
+
+### Admin Authorization (Clerk + DB Fallback) — IMPLEMENTED
+
+Admin access to `/app/admin` and `/app/admin/actions` uses a shared `isClerkOrgAdmin()` helper in `src/lib/auth-admin.ts`:
+
+- **Clerk check:** Uses `has({ role: 'org:admin' })` (recommended) with fallback to `orgRole === 'org:admin'` or `orgRole === 'admin'` for token format compatibility.
+- **DB fallback:** When Clerk check fails, uses `isUserAdmin(orgId, userId)` (Membership.role === "admin").
+- **Applied in:** Admin layout, Admin actions page, App layout (Admin nav visibility), `/app/actions` redirect.
+
+Key files:
+- `src/lib/auth-admin.ts` — `isClerkOrgAdmin()`, `isUserAdmin()`, `isAdminInAnyOrg()`
+- `src/app/app/admin/layout.tsx` — Admin access gate
+- `src/app/app/admin/actions/page.tsx` — Actions page admin check
+- `src/app/app/layout.tsx` — Admin nav link visibility
+- `src/app/app/actions/page.tsx` — Redirect to /app/admin/actions (admins) or /app/articles (non-admins)
+
+Verification: Admin layout and actions page redirect non-admins to /app/articles. Org admins (Clerk or DB) can access Admin and Actions.
+
+### Dev Tools Section Removed — IMPLEMENTED
+
+The Dev Tools section (Create Dev Topic, Enqueue Ingest Job, Run Jobs Now, Run Scheduler Now) has been removed from the Admin Data page. It was previously shown only when `NODE_ENV !== "production"`.
+
+Key file: `src/app/app/admin/page.tsx` — Dev Tools block and related imports (seedDevTopic, enqueueIngestForDevTopic, runJobsNow, runSchedulerNowDev) removed. Admin Data page now shows Invite user and Data governance only.
+
+---
+
 ## Verification Log — Feb 24, 2026
 
 ### Retry & Backoff Mechanics — VERIFIED (Local)
@@ -772,6 +799,41 @@ Last Updated: Feb 21, 2026
 - Removed unused eslint-disable from db.ts
 
 Lint: 0 warnings. Build: passing.
+
+---
+
+## Topic Query Builder (Feature)
+
+Structured search query for topics: display name, search phrase, focus filter (ANY / EXACT / ENTITY / PERSON), and RSS preview before save.
+
+### Implementation summary
+
+- **Schema:** `Topic` has optional `searchPhrase`, `displayName`, and required `focusFilter` (enum `TopicFocus`: ANY, EXACT, ENTITY, PERSON). Migration: `20260308140332_add_topic_query_fields`.
+- **RSS query:** `src/lib/topics/buildRssQuery.ts` — `buildRssQuery(searchPhrase, focusFilter)` returns encoded q value; `buildRssSearchUrl(searchPhrase, focusFilter)` returns full Google News RSS URL. ANY = phrase as-is; EXACT/ENTITY/PERSON = phrase in double quotes, then encoded.
+- **RSS fetch by URL:** `src/lib/rss.ts` — `fetchRssByUrl(fullUrl, limit)` parses feed and returns items (title, url, publishedAt, source from creator when present). `fetchGoogleNewsRss` delegates to it.
+- **Server actions:** `src/app/app/actions.ts` — `previewTopicQuery(searchPhrase, focusFilter, organizationId)` builds URL server-side, fetches RSS, returns up to 5 articles as `{ title, source, publishedAt }` or typed error; logs `topic.preview.fetch` with organizationId and focusFilter (no PII). `createTopicFromForm` and `updateTopic` accept displayName, searchPhrase, focusFilter; validate searchPhrase 2–60 chars and at least 2 words; persist all three. `createOrUpdateTopicForm(formData)` dispatches to create or update by presence of topicId.
+- **INGEST_TOPIC job:** `src/lib/domain/ingestTopic.ts` — loads topic with searchPhrase, focusFilter, query. If searchPhrase set, uses `buildRssSearchUrl(topic.searchPhrase, topic.focusFilter)` and `fetchRssByUrl`; else uses legacy `topic.query` and `fetchGoogleNewsRss`, with log.warn `topic.query.missing` and meta `{ topicId, organizationId }`.
+- **UI:** Topics section on Articles/Ingest is a client section: `TopicsSection` (`src/app/app/articles/TopicsSection.tsx`) and `TopicForm` (`src/app/app/articles/TopicForm.tsx`). Form fields: Topic name (displayName), Search keywords (searchPhrase) with helper and inline word-count warning (<2 or >8 words), Focus (dropdown: Any coverage / Exact phrase / Company or organization / Person) with helper text per option, Preview results (calls previewTopicQuery; shows up to 5 results or error/zero message), Save. Edit per topic: Edit button fills form with that topic; submit calls update. New UI components include `// UI-TODO:` as specified.
+
+### Key files
+
+- `prisma/schema.prisma` — Topic model, TopicFocus enum
+- `prisma/migrations/20260308140332_add_topic_query_fields/`
+- `src/lib/topics/buildRssQuery.ts`
+- `src/lib/rss.ts` — fetchRssByUrl
+- `src/app/app/actions.ts` — previewTopicQuery, createTopicFromForm, updateTopic, createOrUpdateTopicForm
+- `src/lib/domain/ingestTopic.ts` — use buildRssSearchUrl + legacy fallback
+- `src/app/app/articles/IngestCard.server.tsx` — uses TopicsSection
+- `src/app/app/articles/TopicForm.tsx`, `TopicsSection.tsx`
+
+### Verification steps (developer sign-off)
+
+- [ ] Schema: migration applied; new topic has displayName, searchPhrase, focusFilter; legacy topic (no searchPhrase) still works.
+- [ ] Preview: On Articles, enter search keywords and focus, click Preview; see up to 5 headlines with source and relative date, or zero/error message; no RSS URL or raw feed in client or logs.
+- [ ] Create topic: Submit form with topic name, 2–5 word keywords, focus; topic created; word-count warning shows when <2 or >8 words.
+- [ ] Edit topic: Click Edit on a topic; form prefills; change and save; topic updated.
+- [ ] INGEST_TOPIC: New topic (with searchPhrase) ingests via buildRssSearchUrl; legacy topic (no searchPhrase) ingests via query and log.warn `topic.query.missing` in server logs.
+- [ ] `pnpm build` and `pnpm lint` pass.
 
 ---
 
@@ -1476,6 +1538,30 @@ Goal: Implement retention-enforcer (Phase 3.5)
 ---
 
 Threads must not begin implementation planning until alignment with ROADMAP.md is confirmed.
+
+---
+
+## AI Provider — Anthropic Claude
+
+OpenAI has been replaced with Anthropic Claude for all AI operations.
+
+Model: claude-sonnet-4-20250514
+Client: src/lib/ai/anthropic.ts
+Jobs affected: SUMMARIZE_ARTICLE, GENERATE_ACTIONS_FOR_ARTICLE
+
+Key files:
+- src/lib/ai/anthropic.ts — shared Anthropic client and model constant
+- src/lib/domain/summarize.ts — updated to use Anthropic
+- src/lib/domain/generateActions.ts — updated to use Anthropic
+
+Verification (pending developer sign-off):
+- [ ] ANTHROPIC_API_KEY added to Vercel environment variables
+- [ ] Trigger a manual SUMMARIZE_ARTICLE job and confirm summary is returned
+- [ ] Trigger a manual GENERATE_ACTIONS_FOR_ARTICLE job and confirm actions are returned
+- [ ] Confirm structured logs show no PII or raw AI response payloads
+- [ ] Confirm OpenAI SDK is fully removed (or document why it remains)
+
+Status: IMPLEMENTED — AWAITING LOCAL VERIFICATION
 
 ---
 

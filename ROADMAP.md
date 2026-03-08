@@ -5,6 +5,7 @@
 Active Phase: 8 (Repo Hygiene)
 Active Item: Phase 8 complete; lint clean, logging polish, README infra
 Last Verified Milestone: Phase 6 migration applied; Phase 8 hygiene done
+Last Session (Feb 21): Admin access (isClerkOrgAdmin + Clerk/DB fallback); Dev tools removed from Admin Data
 Last Schema Change: UsageEvent inputTokens, outputTokens, model
 Last Migration: 20260304040126_add_usage_event_tokens
 Last Production Deploy: None since retention verification
@@ -20,13 +21,14 @@ Last Production Deploy: None since retention verification
 Active Phase: 8 (Repo Hygiene)
 Active Item: Phase 8 complete; lint clean, logging polish, README infra
 Last Verified Milestone: Phase 6 migration applied; Phase 8 hygiene done
+Last Session (Feb 21): Admin access (isClerkOrgAdmin + Clerk/DB fallback); Dev tools removed from Admin Data
 Last Schema Change: UsageEvent inputTokens, outputTokens, model
 Last Migration: 20260304040126_add_usage_event_tokens
 Last Production Deploy: None since retention verification
 
 ---
 
-Updated Feb 24, 2026
+Updated Feb 21, 2026
 
 ## Phase 0 — Product UI Foundation (Confirmed via Routes)
 
@@ -254,13 +256,19 @@ Phase 3 — Governance Definition Complete (Policy Defined; No Implementation Ye
 - [x] Cost attribution reporting (getCostReport byAction; Observability card)
 
 
-## Phase 7 — UX Polish
-- [ ] Scan-first truncation
-- [ ] Friendly copy refinement
-- [ ] Metrics visual polish
-- [ ] Observability UX refinement
-- [ ] Persona assignment UX improvements
-- [ ] Notification UX refinement
+## Phase 7 — UX Polish (iterative)
+
+Ongoing UI improvements; add concrete items as you go (here or in `docs/ux-backlog.md`).
+
+**Possible directions (not a fixed checklist):**
+- [x] Admin access: isClerkOrgAdmin shared helper; Clerk has() + orgRole + DB fallback; Admin layout, Actions page, redirect; Admin nav visibility.
+- [x] Dev tools section removed from Admin Data page (Invite + Data governance only).
+- [x] Scan-first truncation: article titles line-clamp-2 + title tooltip; topic pill and article source truncated; summary 2 lines + Read more; action row article title truncated (articles page + action-item-row).
+- [x] Copy and tone: friendlier empty states (articles, actions, observability, queue); status labels (To do / In progress / Done / Dismissed); clearer CTAs and error banner; Ingest placeholder and audit "No changes yet."
+- [x] Metrics/observability: intro line and section descriptions (Recent Job Runs, Job Metrics); queue backlog label "Warning at 20+ due · Critical at 50+ due"; clearer at-a-glance context.
+- [x] Personas, notifications, and other flows: persona helper text and placeholder (e.g. Marketing, Sales); notification settings subtitle and no-org copy; "Settings saved" / friendlier form error; data governance no-org copy; "Add persona" button label.
+
+**Track as you decide:** When you land on a specific change, add a line above (e.g. `- [ ] Clearer empty state on Articles`) or a bullet in `docs/ux-backlog.md` and check it off when done.
 
 
 ## Phase 8 — Repo Hygiene
