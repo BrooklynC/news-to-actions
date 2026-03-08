@@ -16,7 +16,6 @@ datasource db {
 
 enum ActionStatus {
   OPEN
-  IN_PROGRESS
   DONE
   DISMISSED
 }
@@ -92,6 +91,13 @@ enum RecipeType {
   PRODUCT_SIGNALS
 }
 
+enum TopicFocus {
+  ANY
+  EXACT
+  ENTITY
+  PERSON
+}
+
 enum DigestCadence {
   OFF
   DAILY
@@ -112,14 +118,17 @@ enum NotificationDeliveryStatus {
 }
 
 model Organization {
-  id                   String                @id @default(cuid())
-  clerkOrgId           String                @unique
-  name                 String
+  id                            String                @id @default(cuid())
+  clerkOrgId                    String                @unique
+  name                          String
+  ingestCadence                 TopicCadence          @default(DAILY)
+  actionItemsPerPersonaPerArticle Int                  @default(2)
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   memberships          Membership[]
   topics               Topic[]
   personas             Persona[]
+  orgSelectedPersonas  OrgSelectedPersona[]
   articles             Article[]
   actionItems          ActionItem[]
   backgroundJobs       BackgroundJob[]
@@ -195,6 +204,9 @@ model Topic {
   organizationId     String
   name               String
   query              String
+  searchPhrase       String?
+  focusFilter        TopicFocus       @default(ANY)
+  displayName        String?
   ingestionCadence   IngestionCadence @default(DAILY)
   isIngestionEnabled Boolean          @default(true)
   nextIngestAt       DateTime?
@@ -208,20 +220,50 @@ model Topic {
   organization       Organization     @relation(fields: [organizationId], references: [id])
   articles           Article[]
   actionItems        ActionItem[]
+  topicPersonas      TopicPersona[]
 
   @@unique([organizationId, name])
   @@index([organizationId, isIngestionEnabled, nextIngestAt])
   @@index([organizationId, cadence, nextRunAt])
 }
 
-model Persona {
-  id             String       @id @default(cuid())
+model TopicPersona {
+  topicId   String
+  personaId String
+  createdAt DateTime @default(now())
+
+  topic   Topic   @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  persona Persona @relation(fields: [personaId], references: [id], onDelete: Cascade)
+
+  @@id([topicId, personaId])
+  @@index([topicId])
+  @@index([personaId])
+}
+
+model OrgSelectedPersona {
   organizationId String
-  name           String
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  actionItems    ActionItem[]
+  personaId      String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  persona      Persona       @relation(fields: [personaId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, personaId])
+  @@index([organizationId])
+  @@index([personaId])
+}
+
+model Persona {
+  id                  String               @id @default(cuid())
+  organizationId      String
+  name                String
+  recipeType          RecipeType?          @default(EXEC_BRIEF)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  organization        Organization         @relation(fields: [organizationId], references: [id])
+  actionItems         ActionItem[]
+  topicPersonas       TopicPersona[]
+  orgSelectedPersonas OrgSelectedPersona[]
 
   @@unique([organizationId, name])
 }
@@ -234,7 +276,8 @@ model Article {
   title          String
   source         String?
   publishedAt    DateTime?
-  summary        String?
+  rssSnippet     String?      // Raw snippet from RSS; used by summarization before AI runs
+  summary        String?      // AI-generated 3–5 bullet summary
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   organization   Organization @relation(fields: [organizationId], references: [id])
