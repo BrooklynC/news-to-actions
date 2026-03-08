@@ -14,6 +14,7 @@ import {
 } from "@/app/app/observability/actions";
 import { runMyOrgJobs } from "@/app/app/actions";
 import { RecentJobRunsTable } from "./RecentJobRunsTable";
+import { RunJobsNowButton } from "./RunJobsNowButton";
 
 function truncateError(s: string | null, maxLen: number = 80): string {
   if (s == null || s === "") return "—";
@@ -166,12 +167,7 @@ export default async function AdminJobsPage() {
               Jobs run on a schedule, or run them now from the Articles page.
             </p>
             <form action={runMyOrgJobs} className="mt-4">
-              <button
-                type="submit"
-                className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
-              >
-                Run jobs now
-              </button>
+              <RunJobsNowButton />
             </form>
           </div>
         </Card>
