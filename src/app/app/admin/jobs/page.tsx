@@ -167,7 +167,7 @@ export default async function AdminJobsPage() {
               First run Execute on Articles to queue jobs, then run them here (or they run via cron every 5 min).
             </p>
             <div className="mt-4">
-              <RunJobsNowButton action={runMyOrgJobs} />
+              <RunJobsNowButton action={runMyOrgJobs} hasQueuedJobs={backlog.dueCount > 0} />
             </div>
           </div>
         </Card>
@@ -186,7 +186,7 @@ export default async function AdminJobsPage() {
           }))}
           />
           <div className="mt-4">
-            <RunJobsNowButton action={runMyOrgJobs} />
+            <RunJobsNowButton action={runMyOrgJobs} hasQueuedJobs={backlog.dueCount > 0} />
           </div>
         </>
       )}

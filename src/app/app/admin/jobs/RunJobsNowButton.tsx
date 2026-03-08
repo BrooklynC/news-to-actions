@@ -4,9 +4,10 @@ import { useTransition } from "react";
 
 type Props = {
   action: (limit?: number) => Promise<void>;
+  hasQueuedJobs: boolean;
 };
 
-export function RunJobsNowButton({ action }: Props) {
+export function RunJobsNowButton({ action, hasQueuedJobs }: Props) {
   const [isPending, startTransition] = useTransition();
 
   const handleClick = () => {
@@ -15,11 +16,14 @@ export function RunJobsNowButton({ action }: Props) {
     });
   };
 
+  const disabled = !hasQueuedJobs || isPending;
+
   return (
     <button
       type="button"
       onClick={handleClick}
-      disabled={isPending}
+      disabled={disabled}
+      title={!hasQueuedJobs ? "No queued jobs. Run Execute on Articles first to queue jobs." : undefined}
       className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-70 disabled:cursor-not-allowed dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
     >
       {isPending ? "Processing…" : "Run jobs now"}
