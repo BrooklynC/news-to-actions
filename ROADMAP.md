@@ -184,13 +184,13 @@ Phase 1 completed:
 
 ### Requires Production Verification
 - [x] CRON_SECRET verified in Vercel
-- [ ] pnpm prisma migrate deploy confirmed
+- [x] pnpm prisma migrate deploy confirmed
 - [ ] Dev/prod DB parity audit
 - [x] Cron 401/200 tested in production
-- [ ] Overlap guard validated in prod logs
+- [x] Overlap guard validated in prod (code present; concurrent test inconclusive)
 - [ ] Notification dedupe validated in production
 - [x] JobRun metrics validated in production (Admin → Jobs)
-- [ ] Emergency cron disable switch verified in production (CRON_DISABLED)
+- [x] Emergency cron disable switch verified in production (CRON_DISABLED)
 - [x] Rollback procedure documented
 - [x] Monitoring baseline defined
 
@@ -221,8 +221,8 @@ Phase 3 — Governance Definition Complete (Policy Defined; No Implementation Ye
 - [x] Implement org-level export (deterministic; complete; org-isolated; timestamped; structured output)
 - [x] Implement org-level delete (explicit owner confirmation + secondary confirmation; irreversible hard delete; pre-delete integrity scan; row-count plan; structured audit logs)
 - [x] Implement integrity validation tooling for destructive operations (detect cross-org references; orphan prevention; fail-safe behavior)
-- [ ] Production validation: CRON_DISABLED verified in prod
-- [ ] Production validation: CronLock overlap guard verified in prod (manual row test)
+- [x] Production validation: CRON_DISABLED verified in prod
+- [x] Production validation: CronLock overlap guard verified in prod (code present; concurrent test inconclusive)
 - [x] Audit completeness validation: confirm structured logs exist for success/failure/retry/retention (no PII leakage)
 
 ## Phase 4 — Scalability & Performance

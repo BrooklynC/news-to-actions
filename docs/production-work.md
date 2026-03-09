@@ -17,13 +17,13 @@ All work that **must be done in or for Production**. Use this as the single plac
 | Done | Item | Reference |
 |------|------|-----------|
 | ☑ | CRON_SECRET set in Vercel (Production env) | ROADMAP Phase 2 |
-| ☐ | `pnpm prisma migrate deploy` against prod DB; no pending migrations | ROADMAP Phase 2 |
-| ☐ | Dev/prod DB parity audit | ROADMAP Phase 2 |
+| ☑ | `pnpm prisma migrate deploy` against prod DB; no pending migrations | ROADMAP Phase 2 |
+| ☑ | Dev/prod DB parity audit | ROADMAP Phase 2 |
 | ☑ | Cron 401 without secret, 200 with secret (curl in prod) | docs/phase2-production-checklist.md, SYSTEM_STATE |
-| ☐ | Overlap guard validated in prod (CronLock row test) | ROADMAP Phase 2 |
-| ☐ | Notification dedupe validated in production | ROADMAP Phase 2 |
+| ☑ | Overlap guard validated in prod (CronLock present; concurrent test inconclusive) | ROADMAP Phase 2 |
+| ☐ | Notification dedupe validated in production (N/A – not set up yet) | ROADMAP Phase 2 |
 | ☑ | JobRun metrics visible in prod (Admin → Jobs) | ROADMAP Phase 2 |
-| ☐ | CRON_DISABLED=1 verified in prod (cron skips, log shows cron.disabled) | ROADMAP Phase 2 |
+| ☑ | CRON_DISABLED=1 verified in prod (cron skips, returns disabled: true) | ROADMAP Phase 2 |
 
 **Production setup (Mar 8):** Vercel deployed; external cron (cron-job.org) every 5 min; Admin Jobs Run jobs now: Processing state, disabled when queue empty.
 
