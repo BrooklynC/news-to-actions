@@ -9,7 +9,7 @@ import { getAuthContext } from "@/lib/auth";
 import {
   isClerkOrgAdmin,
   isUserAdmin,
-  isAdminInAnyOrg,
+  isOnlyMemberOfOrg,
 } from "@/lib/auth-admin";
 import { prisma } from "@/lib/db";
 import { syncDbWithClerk } from "@/lib/sync-clerk";
@@ -30,23 +30,25 @@ export default async function AppLayout({
     if (authContext) {
       await syncDbWithClerk(authContext);
       const authObj = await auth();
-      if (isClerkOrgAdmin(authObj)) {
-        isAdmin = true;
-      } else if (authObj.orgId) {
+      if (authObj.orgId) {
         const org = await prisma.organization.findUnique({
           where: { clerkOrgId: authObj.orgId },
           select: { id: true },
         });
         if (org) {
-          const user = await prisma.user.findUnique({
-            where: { clerkUserId: authContext.clerkUserId },
-            select: { id: true },
-          });
-          isAdmin = await isUserAdmin(org.id, user?.id ?? null);
+          if (isClerkOrgAdmin(authObj)) {
+            isAdmin = true;
+          } else {
+            const user = await prisma.user.findUnique({
+              where: { clerkUserId: authContext.clerkUserId },
+              select: { id: true },
+            });
+            isAdmin = await isUserAdmin(org.id, user?.id ?? null);
+            // Single-user org: only member is treated as admin and gets all views
+            if (!isAdmin && user)
+              isAdmin = await isOnlyMemberOfOrg(org.id, user.id);
+          }
         }
-      }
-      if (!isAdmin) {
-        isAdmin = await isAdminInAnyOrg(authContext.clerkUserId);
       }
     }
   } catch {
@@ -70,12 +72,10 @@ export default async function AppLayout({
             <AppNav failureCount={failedCount} isAdmin={isAdmin} />
             <div className="h-5 w-px bg-stone-200 dark:bg-stone-700" />
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-stone-500 dark:text-stone-400">
-                Organization
-              </span>
               <OrganizationSwitcher
                 afterCreateOrganizationUrl="/app/articles"
                 afterSelectOrganizationUrl="/app/articles"
+                hidePersonal
               />
             </div>
             <div className="flex items-center gap-2">

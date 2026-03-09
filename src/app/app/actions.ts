@@ -14,13 +14,95 @@ import { requireOrgAndUser } from "@/lib/auth";
 import { isUserAdmin } from "@/lib/auth-admin";
 import { prisma } from "@/lib/db";
 import { safeAction } from "@/lib/server/safeAction";
-import { buildRssSearchUrl } from "@/lib/topics/buildRssQuery";
+import {
+  buildRssSearchUrl,
+  buildRssSearchUrlFromParts,
+  buildQueryFromParts,
+  hasTopicSearchParts,
+} from "@/lib/topics/buildRssQuery";
 import { fetchRssByUrl } from "@/lib/rss";
 import { formatRelativeTime } from "@/lib/time";
 import { log } from "@/lib/observability/logger";
 
 const ARTICLES = "/app/articles";
 const ADMIN = "/app/admin";
+
+/**
+ * Create an organization (Clerk org + our DB) for the current user when they have none selected.
+ * Use for "just me" or as the first step before inviting others. Returns { clerkOrgId } so the client can setActive and refresh.
+ */
+export async function createMyOrganization(): Promise<
+  { ok: true; clerkOrgId: string } | { ok: false; error: string }
+> {
+  const authObj = await auth();
+  const userId = authObj.userId;
+  if (!userId)
+    return { ok: false, error: "Not signed in." };
+
+  try {
+    const client = await clerkClient();
+    const clerkOrg = await client.organizations.createOrganization({
+      name: "Personal Account",
+      createdBy: userId,
+    });
+
+    const clerkOrgId = clerkOrg.id;
+    const orgName = clerkOrg.name ?? "Personal Account";
+
+    const dbUser = await prisma.user.upsert({
+      where: { clerkUserId: userId },
+      create: { clerkUserId: userId },
+      update: {},
+    });
+
+    await prisma.organization.upsert({
+      where: { clerkOrgId },
+      create: { clerkOrgId, name: orgName },
+      update: { name: orgName },
+    });
+
+    const dbOrg = await prisma.organization.findUnique({
+      where: { clerkOrgId },
+      select: { id: true },
+    });
+    if (!dbOrg)
+      return { ok: false, error: "Workspace created in Clerk but not in app database." };
+
+    await prisma.membership.upsert({
+      where: {
+        userId_organizationId: {
+          userId: dbUser.id,
+          organizationId: dbOrg.id,
+        },
+      },
+      create: {
+        userId: dbUser.id,
+        organizationId: dbOrg.id,
+        role: "admin",
+      },
+      update: { role: "admin" },
+    });
+
+    return { ok: true, clerkOrgId };
+  } catch (e) {
+    log.warn("createMyOrganization.failed", "Create organization failed", { userId, error: String(e) });
+    return { ok: false, error: "Could not create organization. Use the Organization menu in the header to create one." };
+  }
+}
+
+/** Redirect to articles with Setup section open (used after Add/Edit topic or persona). */
+function articlesWithSetupOpen(opts?: {
+  error?: string;
+  message?: string;
+  setupTab?: "topics" | "personas";
+}): string {
+  const q = new URLSearchParams();
+  q.set("setup", "open");
+  if (opts?.setupTab) q.set("setupTab", opts.setupTab);
+  if (opts?.error) q.set("error", opts.error);
+  if (opts?.message) q.set("message", opts.message);
+  return `${ARTICLES}?${q.toString()}`;
+}
 
 const TOPIC_FOCUS_VALUES: TopicFocus[] = ["ANY", "EXACT", "ENTITY", "PERSON"];
 
@@ -36,6 +118,22 @@ function validateSearchPhrase(phrase: string): { ok: true } | { ok: false; error
   const words = trimmed.split(/\s+/).filter(Boolean);
   if (words.length < 2)
     return { ok: false, error: "Search keywords must contain at least 2 words." };
+  return { ok: true };
+}
+
+function validateTopicSearchParts(
+  keywords: string,
+  companyOrOrg: string,
+  person: string
+): { ok: true } | { ok: false; error: string } {
+  if (!hasTopicSearchParts(keywords, companyOrOrg, person))
+    return { ok: false, error: "Enter at least one of: Keywords, Company or organization, or Person." };
+  const totalLen =
+    (keywords?.trim()?.length ?? 0) +
+    (companyOrOrg?.trim()?.length ?? 0) +
+    (person?.trim()?.length ?? 0);
+  if (totalLen > 200)
+    return { ok: false, error: "Total search text is too long." };
   return { ok: true };
 }
 
@@ -60,8 +158,9 @@ export type PreviewTopicResult =
   | { ok: false; error: string };
 
 export async function previewTopicQuery(
-  searchPhrase: string,
-  focusFilter: string,
+  keywords: string,
+  companyOrOrg: string,
+  person: string,
   organizationId: string
 ): Promise<PreviewTopicResult> {
   const org = await prisma.organization.findFirst({
@@ -70,12 +169,13 @@ export async function previewTopicQuery(
   });
   if (!org) return { ok: false, error: "Organization not found." };
 
-  const focus = parseTopicFocus(focusFilter);
-  const url = buildRssSearchUrl(searchPhrase.trim(), focus);
-  log.info("topic.preview.fetch", "Preview RSS fetch", {
-    organizationId: org.id,
-    meta: { focusFilter: focus },
-  });
+  const validation = validateTopicSearchParts(keywords, companyOrOrg, person);
+  if (!validation.ok) return { ok: false, error: validation.error };
+
+  const url = buildRssSearchUrlFromParts(keywords, companyOrOrg, person);
+  if (!url) return { ok: false, error: "Enter at least one of: Keywords, Company or organization, or Person." };
+
+  log.info("topic.preview.fetch", "Preview RSS fetch", { organizationId: org.id });
 
   try {
     const items = await fetchRssByUrl(url, 5);
@@ -97,89 +197,104 @@ export async function previewTopicQuery(
 export async function createTopicFromForm(formData: FormData) {
   const { orgId: clerkOrgId } = await auth();
   if (!clerkOrgId)
-    redirect(`${ARTICLES}?error=` + encodeURIComponent("No organization selected."));
+    redirect(articlesWithSetupOpen({ error: "No organization selected." }));
 
   const org = await prisma.organization.findUnique({
     where: { clerkOrgId },
     select: { id: true },
   });
   if (!org)
-    redirect(`${ARTICLES}?error=` + encodeURIComponent("No organization selected."));
+    redirect(articlesWithSetupOpen({ error: "No organization selected." }));
 
   const displayName = String(formData.get("displayName") ?? formData.get("name") ?? "").trim();
-  const searchPhrase = String(formData.get("searchPhrase") ?? formData.get("query") ?? "").trim();
-  const focusFilter = parseTopicFocus(String(formData.get("focusFilter") ?? "ANY"));
+  const keywords = String(formData.get("keywords") ?? "").trim();
+  const companyOrOrg = String(formData.get("companyOrOrg") ?? "").trim();
+  const person = String(formData.get("person") ?? "").trim();
 
-  if (!displayName || !searchPhrase)
-    redirect(`${ARTICLES}?error=` + encodeURIComponent("Topic name and search keywords are required."));
+  if (!displayName)
+    redirect(articlesWithSetupOpen({ error: "Topic name is required." }));
 
-  const validation = validateSearchPhrase(searchPhrase);
+  const validation = validateTopicSearchParts(keywords, companyOrOrg, person);
   if (!validation.ok)
-    redirect(`${ARTICLES}?error=` + encodeURIComponent(validation.error));
+    redirect(articlesWithSetupOpen({ error: validation.error }));
+
+  const query = buildQueryFromParts(keywords || null, companyOrOrg || null, person || null);
 
   const topicLimit = await checkTopicLimit(org.id);
   if (!topicLimit.ok)
-    redirect(`${ARTICLES}?error=` + encodeURIComponent(topicLimit.message));
+    redirect(articlesWithSetupOpen({ error: topicLimit.message }));
 
   try {
     await prisma.topic.create({
       data: {
         organizationId: org.id,
         name: displayName,
-        query: searchPhrase,
+        query,
         displayName,
-        searchPhrase,
-        focusFilter,
+        keywords: keywords || null,
+        companyOrOrg: companyOrOrg || null,
+        person: person || null,
       },
     });
   } catch (e: unknown) {
     if (e && typeof e === "object" && "code" in e && (e as { code: string }).code === "P2002") {
-      redirect(`${ARTICLES}?error=` + encodeURIComponent(`Topic "${displayName}" already exists.`));
+      redirect(articlesWithSetupOpen({ error: `Topic "${displayName}" already exists.` }));
     }
     throw e;
   }
-  redirect(ARTICLES);
+  redirect(articlesWithSetupOpen());
 }
 
 export async function updateTopic(formData: FormData) {
   const { orgId: clerkOrgId } = await auth();
   if (!clerkOrgId)
-    redirect(`${ARTICLES}?error=` + encodeURIComponent("No organization selected."));
+    redirect(articlesWithSetupOpen({ error: "No organization selected." }));
 
   const org = await prisma.organization.findUnique({
     where: { clerkOrgId },
     select: { id: true },
   });
   if (!org)
-    redirect(`${ARTICLES}?error=` + encodeURIComponent("No organization selected."));
+    redirect(articlesWithSetupOpen({ error: "No organization selected." }));
 
   const topicId = String(formData.get("topicId") ?? "").trim();
   if (!topicId)
-    redirect(`${ARTICLES}?error=` + encodeURIComponent("topicId is required."));
+    redirect(articlesWithSetupOpen({ error: "topicId is required." }));
 
   const topic = await prisma.topic.findFirst({
     where: { id: topicId, organizationId: org.id },
     select: { id: true },
   });
   if (!topic)
-    redirect(`${ARTICLES}?error=` + encodeURIComponent("Topic not found."));
+    redirect(articlesWithSetupOpen({ error: "Topic not found." }));
 
   const displayName = String(formData.get("displayName") ?? "").trim();
-  const searchPhrase = String(formData.get("searchPhrase") ?? "").trim();
-  const focusFilter = parseTopicFocus(String(formData.get("focusFilter") ?? "ANY"));
+  const keywords = String(formData.get("keywords") ?? "").trim();
+  const companyOrOrg = String(formData.get("companyOrOrg") ?? "").trim();
+  const person = String(formData.get("person") ?? "").trim();
 
-  if (!displayName || !searchPhrase)
-    redirect(`${ARTICLES}?error=` + encodeURIComponent("Topic name and search keywords are required."));
+  if (!displayName)
+    redirect(articlesWithSetupOpen({ error: "Topic name is required." }));
 
-  const validation = validateSearchPhrase(searchPhrase);
+  const validation = validateTopicSearchParts(keywords, companyOrOrg, person);
   if (!validation.ok)
-    redirect(`${ARTICLES}?error=` + encodeURIComponent(validation.error));
+    redirect(articlesWithSetupOpen({ error: validation.error }));
+
+  const query = buildQueryFromParts(keywords || null, companyOrOrg || null, person || null);
 
   await prisma.topic.update({
     where: { id: topic.id },
-    data: { displayName, searchPhrase, focusFilter, name: displayName, query: searchPhrase, updatedAt: new Date() },
+    data: {
+      displayName,
+      name: displayName,
+      query,
+      keywords: keywords || null,
+      companyOrOrg: companyOrOrg || null,
+      person: person || null,
+      updatedAt: new Date(),
+    },
   });
-  redirect(ARTICLES);
+  redirect(articlesWithSetupOpen());
 }
 
 /**
@@ -451,6 +566,43 @@ export async function updateOrgSelectedPersonas(formData: FormData) {
     }
 
     redirect(`${ARTICLES}?message=` + encodeURIComponent("Personas for action generation updated."));
+  });
+}
+
+/**
+ * Toggle whether a persona is active (included in the feed).
+ * Form: personaId, active (optional; present = active).
+ */
+export async function setPersonaActive(formData: FormData) {
+  return safeAction(async () => {
+    const org = await getOrgAndRedirect();
+  const personaId = String(formData.get("personaId") ?? "").trim();
+  const active = formData.get("active") === "on" || formData.get("active") === "true";
+  if (!personaId)
+    redirect(articlesWithSetupOpen({ error: "personaId is required." }));
+
+  const persona = await prisma.persona.findFirst({
+    where: { id: personaId, organizationId: org.id },
+    select: { id: true },
+  });
+  if (!persona)
+    redirect(articlesWithSetupOpen({ error: "Persona not found." }));
+
+    if (active) {
+      await prisma.orgSelectedPersona.upsert({
+        where: {
+          organizationId_personaId: { organizationId: org.id, personaId: persona.id },
+        },
+        create: { organizationId: org.id, personaId: persona.id },
+        update: {},
+      });
+    } else {
+      await prisma.orgSelectedPersona.deleteMany({
+        where: { organizationId: org.id, personaId: persona.id },
+      });
+    }
+
+    redirect(articlesWithSetupOpen({ setupTab: "personas" }));
   });
 }
 
