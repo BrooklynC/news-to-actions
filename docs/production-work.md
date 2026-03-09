@@ -42,7 +42,7 @@ All work that **must be done in or for Production**. Use this as the single plac
 
 | Done | Item | Reference |
 |------|------|-----------|
-| ☐ | Run cron stress test in prod: `CRON_SECRET=xxx BASE_URL=https://... ./scripts/cron-stress-test.sh 5 20` | scripts/cron-stress-test.sh |
+| ☑ | Run cron stress test in prod: `CRON_SECRET=xxx BASE_URL=https://... bash scripts/cron-stress-test.sh 5 20` (20 success, 0 fail) | scripts/cron-stress-test.sh |
 | ☐ | Index review under load: pg_stat_statements, add indexes for slow queries | docs/index-review.md |
 
 ---

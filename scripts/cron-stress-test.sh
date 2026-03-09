@@ -16,11 +16,12 @@ SUCCESS=0
 FAIL=0
 TOTAL_MS=0
 
+# Portable millisecond timestamp (macOS date lacks %N)
 for i in $(seq 1 "$TOTAL"); do
   (
-    START=$(date +%s%3N)
+    START=$(python3 -c "import time; print(int(time.time()*1000))" 2>/dev/null || echo "$(date +%s)000")
     STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X GET -H "x-cron-secret: $CRON_SECRET" "$BASE_URL/api/cron/run-jobs")
-    END=$(date +%s%3N)
+    END=$(python3 -c "import time; print(int(time.time()*1000))" 2>/dev/null || echo "$(date +%s)000")
     MS=$((END - START))
     echo "$STATUS $MS" > /tmp/cron-stress-$i
   ) &
