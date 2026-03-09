@@ -60,6 +60,20 @@ export async function syncDbWithClerk(ctx: AuthContext): Promise<SyncResult> {
       cookieStore.delete("signup_as_admin");
     }
 
+    // Single-user workspace: ensure the only member is admin so they get all views
+    const memberCount = await prisma.membership.count({
+      where: { organizationId: dbOrg.id },
+    });
+    if (memberCount === 1) {
+      await prisma.membership.updateMany({
+        where: {
+          organizationId: dbOrg.id,
+          userId: dbUser.id,
+        },
+        data: { role: "admin" },
+      });
+    }
+
     return { success: true, dbUserId: dbUser.id };
   } catch {
     return { success: false };

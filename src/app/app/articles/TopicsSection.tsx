@@ -9,12 +9,7 @@ import {
   type TopicHealth,
 } from "@/lib/types/topicHealth";
 import Link from "next/link";
-import {
-  createOrUpdateTopicForm,
-  previewTopicQuery,
-  refreshTopic,
-} from "@/app/app/actions";
-import type { PreviewTopicResult } from "@/app/app/actions";
+import { createOrUpdateTopicForm, refreshTopic } from "@/app/app/actions";
 import { TopicForm } from "./TopicForm";
 
 function healthDotColor(health: TopicHealth): string {
@@ -37,8 +32,12 @@ export type TopicRow = {
   name: string;
   query: string;
   displayName: string | null;
-  searchPhrase: string | null;
-  focusFilter: string;
+  keywords: string | null;
+  companyOrOrg: string | null;
+  person: string | null;
+  /** Legacy: used to backfill form when editing topics created with old Focus field */
+  searchPhrase?: string | null;
+  focusFilter?: string | null;
   lastIngestAt: Date | null;
   nextRunAt: Date | null;
   health: TopicHealth;
@@ -53,37 +52,64 @@ type Props = {
   organizationId: string;
   topics: TopicRow[];
   orgCadence: string;
+  isAdmin: boolean;
 };
 
-export function TopicsSection({ organizationId, topics, orgCadence }: Props) {
+export function TopicsSection({ organizationId, topics, orgCadence, isAdmin }: Props) {
   const [editingTopic, setEditingTopic] = useState<TopicRow | null>(null);
 
   const initialTopic = editingTopic
-    ? {
-        id: editingTopic.id,
-        displayName: editingTopic.displayName ?? editingTopic.name,
-        searchPhrase: editingTopic.searchPhrase ?? editingTopic.query,
-        focusFilter: editingTopic.focusFilter ?? "ANY",
-      }
+    ? (() => {
+        const hasNewFields =
+          (editingTopic.keywords?.trim()?.length ?? 0) > 0 ||
+          (editingTopic.companyOrOrg?.trim()?.length ?? 0) > 0 ||
+          (editingTopic.person?.trim()?.length ?? 0) > 0;
+        const legacyPhrase = editingTopic.searchPhrase?.trim() ?? editingTopic.query?.trim();
+        const focus = (editingTopic.focusFilter ?? "ANY").toUpperCase();
+        return {
+          id: editingTopic.id,
+          displayName: editingTopic.displayName ?? editingTopic.name,
+          keywords: hasNewFields
+            ? editingTopic.keywords ?? ""
+            : focus === "ENTITY" || focus === "PERSON"
+              ? ""
+              : legacyPhrase ?? "",
+          companyOrOrg: hasNewFields
+            ? editingTopic.companyOrOrg ?? ""
+            : focus === "ENTITY"
+              ? legacyPhrase ?? ""
+              : "",
+          person: hasNewFields
+            ? editingTopic.person ?? ""
+            : focus === "PERSON"
+              ? legacyPhrase ?? ""
+              : "",
+        };
+      })()
     : null;
 
   return (
-    <div className="min-w-0 flex-1 space-y-3">
-      <h4 className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+    <div>
+      <h3 className="mb-4 text-base font-medium text-stone-900 dark:text-stone-100">
         Topics
-      </h4>
-      <TopicForm
-        organizationId={organizationId}
-        initialTopic={initialTopic}
-        createOrUpdateTopicForm={createOrUpdateTopicForm}
-        previewTopicQuery={previewTopicQuery as (a: string, b: string, c: string) => Promise<PreviewTopicResult>}
-      />
-      {topics.length === 0 && (
-        <p className="rounded-xl border border-zinc-200 bg-zinc-50/50 p-4 text-sm text-zinc-500 dark:border-zinc-600 dark:bg-zinc-800/30 dark:text-zinc-400">
-          No topics yet. Add one above to get started.
-        </p>
-      )}
-      {topics.length > 0 && (
+      </h3>
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+        {/* Left: form (Topic name, etc.) */}
+        <div className="min-w-0 flex-1 space-y-3 lg:max-w-md">
+          <TopicForm
+            key={initialTopic?.id ?? "new"}
+            organizationId={organizationId}
+            initialTopic={initialTopic}
+            createOrUpdateTopicForm={createOrUpdateTopicForm}
+          />
+        </div>
+        {/* Right: list of topics — first card aligns with Topic name */}
+        <div className="min-w-0 flex-1 lg:min-w-[320px]">
+        {topics.length === 0 ? (
+          <p className="rounded-xl border border-zinc-200 bg-zinc-50/50 p-4 text-sm text-zinc-500 dark:border-zinc-600 dark:bg-zinc-800/30 dark:text-zinc-400">
+            No topics yet. Add one to get started.
+          </p>
+        ) : (
         <ul className="space-y-3">
           {topics.map((t) => (
             <li
@@ -101,9 +127,9 @@ export function TopicsSection({ organizationId, topics, orgCadence }: Props) {
                     </h4>
                     <span
                       className="truncate text-xs text-zinc-500 dark:text-zinc-400"
-                      title={t.searchPhrase ?? t.query}
+                      title={t.query}
                     >
-                      {t.searchPhrase ?? t.query}
+                      {t.query}
                     </span>
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
@@ -151,7 +177,11 @@ export function TopicsSection({ organizationId, topics, orgCadence }: Props) {
                   </div>
                   {t.health === "FAILED" && (
                     <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                      Recent failure — <Link href="/app/admin/jobs" className="underline hover:no-underline">see Jobs</Link>
+                      {isAdmin ? (
+                        <>Recent failure — <Link href="/app/admin/jobs" className="underline hover:no-underline">see Jobs</Link></>
+                      ) : (
+                        <>Recent failure. Try Refresh or Execute again.</>
+                      )}
                     </p>
                   )}
                 </div>
@@ -177,7 +207,9 @@ export function TopicsSection({ organizationId, topics, orgCadence }: Props) {
             </li>
           ))}
         </ul>
-      )}
+        )}
+        </div>
+      </div>
     </div>
   );
 }

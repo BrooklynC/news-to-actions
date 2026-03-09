@@ -43,25 +43,53 @@ export async function createTopic(formData: FormData) {
   redirect(ARTICLES);
 }
 
+function articlesWithSetupOpen(error?: string, setupTab?: "topics" | "personas"): string {
+  const q = new URLSearchParams();
+  q.set("setup", "open");
+  if (setupTab) q.set("setupTab", setupTab);
+  if (error) q.set("error", error);
+  return `${ARTICLES}?${q.toString()}`;
+}
+
 export async function createPersona(formData: FormData) {
   const { orgId: clerkOrgId } = await auth();
-  if (!clerkOrgId) redirect(`${ARTICLES}?error=` + encodeURIComponent("No organization selected."));
+  if (!clerkOrgId) redirect(articlesWithSetupOpen("No organization selected.", "personas"));
 
   const org = await prisma.organization.findUnique({ where: { clerkOrgId }, select: { id: true } });
-  if (!org) redirect(`${ARTICLES}?error=` + encodeURIComponent("No organization selected."));
+  if (!org) redirect(articlesWithSetupOpen("No organization selected.", "personas"));
 
   const name = (formData.get("name") as string)?.trim() ?? "";
-  if (!name) redirect(`${ARTICLES}?error=` + encodeURIComponent("name is required"));
+  if (!name) redirect(articlesWithSetupOpen("name is required", "personas"));
 
   try {
     await prisma.persona.create({ data: { organizationId: org.id, name } });
   } catch (e: unknown) {
     if (e && typeof e === "object" && "code" in e && (e as { code: string }).code === "P2002") {
-      redirect(`${ARTICLES}?error=` + encodeURIComponent(`Persona "${name}" already exists.`));
+      redirect(articlesWithSetupOpen(`Persona "${name}" already exists.`, "personas"));
     }
     throw e;
   }
-  redirect(ARTICLES);
+  redirect(articlesWithSetupOpen(undefined, "personas"));
+}
+
+export async function deletePersona(formData: FormData) {
+  const { orgId: clerkOrgId } = await auth();
+  if (!clerkOrgId) redirect(articlesWithSetupOpen("No organization selected.", "personas"));
+
+  const org = await prisma.organization.findUnique({ where: { clerkOrgId }, select: { id: true } });
+  if (!org) redirect(articlesWithSetupOpen("No organization selected.", "personas"));
+
+  const personaId = (formData.get("personaId") as string)?.trim() ?? "";
+  if (!personaId) redirect(articlesWithSetupOpen("personaId is required.", "personas"));
+
+  const persona = await prisma.persona.findFirst({
+    where: { id: personaId, organizationId: org.id },
+    select: { id: true, name: true },
+  });
+  if (!persona) redirect(articlesWithSetupOpen("Persona not found.", "personas"));
+
+  await prisma.persona.delete({ where: { id: persona.id } });
+  redirect(articlesWithSetupOpen(undefined, "personas"));
 }
 
 export async function fetchArticlesForTopic(formData: FormData) {

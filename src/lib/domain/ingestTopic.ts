@@ -7,7 +7,11 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { enforceCaps } from "@/lib/guardrails/caps";
 import { log } from "@/lib/observability/logger";
-import { buildRssSearchUrl } from "@/lib/topics/buildRssQuery";
+import {
+  buildRssSearchUrl,
+  buildRssSearchUrlFromParts,
+  hasTopicSearchParts,
+} from "@/lib/topics/buildRssQuery";
 import { fetchRssByUrl, fetchGoogleNewsRss } from "@/lib/rss";
 
 function isPrismaP2002(e: unknown): e is Prisma.PrismaClientKnownRequestError {
@@ -27,17 +31,32 @@ export async function executeIngestTopic(
 ): Promise<IngestTopicResult> {
   const topic = await prisma.topic.findFirst({
     where: { id: topicId, organizationId },
-    select: { id: true, query: true, searchPhrase: true, focusFilter: true },
+    select: {
+      id: true,
+      query: true,
+      searchPhrase: true,
+      focusFilter: true,
+      keywords: true,
+      companyOrOrg: true,
+      person: true,
+    },
   });
   if (!topic) throw new Error("Topic not found");
 
   let items: Awaited<ReturnType<typeof fetchRssByUrl>>;
-  if (topic.searchPhrase != null && topic.searchPhrase.trim() !== "") {
+  if (hasTopicSearchParts(topic.keywords, topic.companyOrOrg, topic.person)) {
+    const url = buildRssSearchUrlFromParts(topic.keywords, topic.companyOrOrg, topic.person);
+    if (url) {
+      items = await fetchRssByUrl(url, 5);
+    } else {
+      items = await fetchGoogleNewsRss(topic.query, 5);
+    }
+  } else if (topic.searchPhrase != null && topic.searchPhrase.trim() !== "") {
     items = await fetchRssByUrl(buildRssSearchUrl(topic.searchPhrase.trim(), topic.focusFilter), 5);
   } else {
     log.warn(
       "topic.query.missing",
-      "Topic missing searchPhrase, falling back to legacy query",
+      "Topic missing search inputs, falling back to legacy query",
       { organizationId, meta: { topicId } }
     );
     items = await fetchGoogleNewsRss(topic.query, 5);

@@ -3,7 +3,11 @@ import { auth } from "@clerk/nextjs/server";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { AdminSubNav } from "./AdminSubNav";
 import { getAuthContext } from "@/lib/auth";
-import { isClerkOrgAdmin, isUserAdmin } from "@/lib/auth-admin";
+import {
+  isClerkOrgAdmin,
+  isUserAdmin,
+  isOnlyMemberOfOrg,
+} from "@/lib/auth-admin";
 import { prisma } from "@/lib/db";
 import { syncDbWithClerk } from "@/lib/sync-clerk";
 
@@ -31,7 +35,9 @@ export default async function AdminLayout({
         where: { clerkUserId: authContext.clerkUserId },
         select: { id: true },
       });
-      return isUserAdmin(org.id, user?.id ?? null);
+      if (await isUserAdmin(org.id, user?.id ?? null)) return true;
+      // Single-user org: only member gets full admin access
+      return isOnlyMemberOfOrg(org.id, user?.id ?? null);
     })());
 
   if (!admin) redirect("/app/articles");

@@ -1,6 +1,6 @@
 # SYSTEM_STATE.md
 
-*Last Updated: Feb 21, 2026*
+*Last Updated: Mar 9, 2026*
 
 This document is the canonical, repo-backed source of truth for the actual implemented state of the News Actions system.
 
@@ -43,74 +43,6 @@ A roadmap item may only be marked complete in `ROADMAP.md` if:
    * A brief verification note (how we know it works).
 
 No checkbox should be checked without a verification note in SYSTEM_STATE.md.
-
-## Thread Working Rules
-
-When working via ChatGPT threads:
-
-* Present decision points first.
-* Then provide ONE copy/paste Cursor prompt OR ONE terminal command at a time.
-* If requesting pasted output, do NOT include additional steps below that request.
-* Prefer `grep` over `rg` in terminal instructions.
-* Do not commit debug scripts.
-* Roadmap Source of Truth: Any recommended or planned work must exist as an explicit checklist item in ROADMAP.md. If a new task is discovered during discussion, it must be added to ROADMAP.md (via a Cursor prompt) before it is referenced as a "next step." Avoid mentioning out-of-roadmap tasks to prevent confusion and thread drift.
-* All terminal instructions must be provided as a single copyable command only, automatically including a macOS `| pbcopy` variant. No explanatory text may appear before or after the command. Explanations must be requested explicitly by the user.
-* Every terminal command or Cursor prompt must be preceded by one short sentence explaining its purpose, so the user understands what the action is intended to achieve.
-* New Thread Bootstrap (Preferred): Attach ROADMAP.md and SYSTEM_STATE.md (and THREAD_LOG.md if present) to each new thread. When files are attached, treat them as authoritative and do NOT require pasting their full contents into the seed. If file attachments are unavailable or incomplete, fall back to pasting full file contents.
-
-## Minimal New Thread Seed Template
-
-Use the following template when starting a new ChatGPT thread:
-
----
-
-NEW THREAD — News Actions
-
-Canonical Documents (Authoritative)
-
-The following files are attached in full and are binding:
-- ROADMAP.md
-- SYSTEM_STATE.md
-- THREAD_LOG.md (if present)
-
-Assume:
-- These documents are complete and authoritative.
-- No reinterpretation of checklist wording is allowed.
-- No roadmap items may be invented, reworded, or implied without a Cursor prompt updating ROADMAP.md.
-- If a recommended task is not present on ROADMAP.md, it must be added via Cursor before discussion continues.
-- SYSTEM_STATE operating rules are permanent unless explicitly amended via Cursor.
-- THREAD_LOG is append-only; never edit prior entries (only append a new "Thread N — YYYY-MM-DD" entry).
-
-Execution Rules
-- No schema changes without an explicit roadmap item.
-- No new jobs without a roadmap item.
-- No production-impacting changes without checklist reference.
-- All recommended changes must be provided as single copyable Cursor prompts or single copyable terminal commands (include a macOS `| pbcopy` variant by default).
-- Every command or prompt must be preceded by one short sentence explaining its purpose.
-- No silent failures permitted.
-- Org isolation invariants remain enforced.
-- Multi-tenant guarantees must not regress.
-- Structured logging guarantees remain mandatory.
-- Retention windows must follow SYSTEM_STATE definitions exactly.
-- Enforcement must be idempotent.
-- Hard delete operational logs only.
-- Must not cascade into Core Business Records.
-- Dry-run mode required before activation.
-
-Thread Bootstrap
-Thread #:
-Today's Date (America/New_York):
-
-Changes Since Last Thread (bullet list; required):
--
-
-Current Goal
-Goal:
-Constraints: follow all Execution Rules above.
-
-Begin analysis only after confirming you can see the full attached ROADMAP.md and SYSTEM_STATE.md files in this thread. If they are not visible, request that they be pasted in full.
-
----
 
 # 1. Core Architecture
 
@@ -594,12 +526,7 @@ Status: RESOLVED + VERIFIED (Feb 24, 2026)
 
 # Governance Rule Going Forward
 
-Threads do not define truth.
-This file defines truth.
-
-Every new thread seed must reference SYSTEM_STATE.md verbatim.
-
-Checkbox updates go in ROADMAP.md; verification evidence belongs in this document.
+This file defines truth. Checkbox updates go in ROADMAP.md; verification evidence belongs in this document.
 
 ---
 
@@ -688,6 +615,63 @@ Operational visibility: COMPLETE (org-scoped observability in UI)
 - Confirmed active Neon endpoint: ep-rough-mud-ais9m3u3-pooler.c-4.us-east-1.aws.neon.tech
 - The ep-snowy-sunset endpoint returned "requested endpoint could not be found" and is not currently valid.
 - DATABASE_URL must reference the active endpoint for migrations and cron processing.
+
+---
+
+## Verification Log — Mar 8–9, 2026
+
+### Production Deployment (Vercel)
+
+- **Live URL:** https://news-to-actions.vercel.app
+- Deploy via `npx vercel --prod` or Git push (auto-deploy when connected).
+- **Cron:** Vercel Hobby plan limits built-in cron to once/day. No `vercel.json` cron; using external **cron-job.org** to hit `/api/cron/run-jobs?secret=...` every 5 minutes.
+- **Env:** CRON_SECRET, DATABASE_URL, DIRECT_URL, ANTHROPIC_API_KEY, Clerk keys, NEXT_SERVER_ACTIONS_ENCRYPTION_KEY in Vercel (Production). Neon integration may inject additional PG* vars; app uses only DATABASE_URL and DIRECT_URL.
+
+Status: PRODUCTION DEPLOYED + VERIFIED
+
+### Phase 2 Production Verification
+
+- **CRON_SECRET** set in Vercel (Production).
+- **Cron 401/200** tested in prod (curl with and without secret).
+- **Migrations:** `prisma migrate status` and `prisma migrate deploy` against prod DB — all 20 migrations applied, no pending.
+- **Dev/prod DB parity** confirmed (same schema).
+- **JobRun metrics** visible in Admin → Jobs (Recent Job Runs, AI usage, queue backlog).
+- **CRON_DISABLED=1** verified in prod: cron returns `ok: true, disabled: true`; then removed for normal operation.
+- **CronLock overlap guard:** Code verified; concurrent curl test inconclusive (cron completes too quickly with empty queue).
+- **Notification dedupe:** N/A (Slack/email not set up yet).
+
+Status: PHASE 2 PRODUCTION VERIFICATION COMPLETE
+
+### Admin Jobs — Run jobs now
+
+- **Processing state:** "Run jobs now" uses `useTransition` and server action (passed by reference); button shows "Processing…" while running.
+- **Visibility:** Button shown when recentRuns.length === 0 and when > 0 (below Recent Job Runs table).
+- **Disabled when empty:** Button disabled when `backlog.dueCount === 0`; tooltip: "No queued jobs. Run Execute on Articles first to queue jobs."
+- Key file: `src/app/app/admin/jobs/RunJobsNowButton.tsx` (client); `src/app/app/admin/jobs/page.tsx` (passes `runMyOrgJobs` and `hasQueuedJobs`).
+
+Status: IMPLEMENTED + PRODUCTION VERIFIED
+
+### Phase 4 — Cron Stress Test (Prod)
+
+- Ran `CRON_SECRET=... BASE_URL=https://news-to-actions.vercel.app bash scripts/cron-stress-test.sh 5 20`.
+- Result: 20 success, 0 fail; avg response ~591ms.
+- Script updated for macOS: `date +%s%3N` replaced with `python3 -c "import time; print(int(time.time()*1000))"` for portable millisecond timestamps.
+
+Status: PRODUCTION VERIFIED
+
+### Pre-Production Checklist (Completed Items)
+
+- **Backoff + DEAD:** Verified locally with `SIMULATE_JOB_FAILURE=INGEST_TOPIC`; job moved to DEAD after maxAttempts (log event `job.dead`).
+- **No duplicate background execution:** Overlap guard in code; stress test passed.
+- **Cron endpoint not Clerk-gated:** Secret-gated only (401 without secret, 200 with secret).
+- **Logs no sensitive payload:** Audited log calls; only IDs, counts, duration, error messages; no secrets, prompts, or payloadJson.
+- **Deterministic simulation:** Phase 1 sweep (INGEST_TOPIC, SUMMARIZE_ARTICLE, GENERATE_ACTIONS; fail→retry→backoff→DEAD).
+- **Manual CronLock test:** Code verified; concurrent test inconclusive.
+
+### Repo Cleanup
+
+- **Removed:** THREAD_LOG.md, NEW_THREAD_SEED.md (ChatGPT thread workflow no longer used).
+- **SYSTEM_STATE.md:** Removed Thread Working Rules, Minimal New Thread Seed Template, New Thread Protocol (canonical seed template), and thread references from Governance Rule. ROADMAP and verification content unchanged.
 
 ### 2026-02-25 — Retention Enforcer Verification (Local Deterministic Proof)
 
@@ -1479,65 +1463,6 @@ Core business data may only be removed via:
 - Irreversible hard delete
 
 Tracked under Phase 3 roadmap.
-
----
-
-# New Thread Protocol (Canonical Seed Template)
-
----
-
-## NEW THREAD — News Actions
-
-### Canonical Documents (Authoritative)
-
-The following files MUST be attached in full at the start of every new thread and are binding:
-
-- SYSTEM_STATE.md  
-- ROADMAP.md  
-
-Rules:
-
-- These documents are complete and authoritative.
-- No reinterpretation of checklist wording is allowed.
-- No roadmap items may be invented, reworded, or implied without a Cursor prompt updating ROADMAP.md.
-- If a recommended task is not present on ROADMAP.md, it must be added via Cursor before discussion continues.
-- SYSTEM_STATE operating rules are permanent unless explicitly amended via Cursor.
-
-If any inconsistency appears, it must be flagged before proceeding.
-
----
-
-### Execution Rules
-
-- No schema changes without an explicit roadmap item.
-- No new jobs without a roadmap item.
-- No production-impacting changes without checklist reference.
-- All recommended changes must be provided as single copyable Cursor prompts.
-- Do not reference out-of-roadmap work.
-- Do not summarize or reinterpret roadmap phases unless explicitly asked.
-
----
-
-### Current Goal
-
-Each new thread must include a one-sentence goal tied to a specific roadmap checkbox.
-
-Example:
-Goal: Implement retention-enforcer (Phase 3.5)
-
----
-
-### Constraints
-
-- Org Isolation invariants remain enforced.
-- Multi-tenant guarantees must not regress.
-- Structured logging guarantees remain mandatory.
-- No silent failures permitted.
-- Deterministic behavior required for all background jobs.
-
----
-
-Threads must not begin implementation planning until alignment with ROADMAP.md is confirmed.
 
 ---
 

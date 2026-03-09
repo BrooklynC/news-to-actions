@@ -55,7 +55,7 @@ All work that **must be done in or for Production**. Use this as the single plac
 | ☑ | Cron returns 401 without secret | ROADMAP Pre-Production |
 | ☑ | Cron returns 200 with secret | ROADMAP Pre-Production |
 | ☐ | Manual CronLock row test → { skipped: true } | ROADMAP Pre-Production |
-| ☐ | Backoff + DEAD behavior verified | ROADMAP Pre-Production |
+| ☑ | Backoff + DEAD behavior verified (local: SIMULATE_JOB_FAILURE) | ROADMAP Pre-Production |
 | ☐ | Notification dedupe verified | ROADMAP Pre-Production |
 | ☑ | JobRun metrics visible | ROADMAP Pre-Production |
 | ☐ | No duplicate background execution | ROADMAP Pre-Production |

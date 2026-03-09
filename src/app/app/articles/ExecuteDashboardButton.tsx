@@ -95,7 +95,10 @@ export function ExecuteDashboardButton({ initialStatus }: Props) {
     return (
       <button
         type="button"
-        onClick={() => router.refresh()}
+        onClick={() => {
+          setHadWork(false);
+          router.refresh();
+        }}
         className="rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-transform duration-150 hover:bg-zinc-800 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300 focus-visible:ring-offset-2 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
       >
         {label}

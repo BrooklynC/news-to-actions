@@ -6,6 +6,7 @@ import { setActionItemStatus } from "./actions";
 import { FeedPersonaSwitcher } from "./FeedPersonaSwitcher";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { getAuthContext } from "@/lib/auth";
+import { isClerkOrgAdmin, isUserAdmin } from "@/lib/auth-admin";
 import { prisma } from "@/lib/db";
 import { syncDbWithClerk } from "@/lib/sync-clerk";
 import {
@@ -15,8 +16,11 @@ import {
   enrichTopicsWithQueueState,
 } from "@/lib/topics/health";
 import type { TopicHealth } from "@/lib/types/topicHealth";
-import { IngestCardServer } from "./IngestCard.server";
+import { TopicsCard, PersonasCard } from "./IngestCard.server";
 import { ExecuteDashboardButton } from "./ExecuteDashboardButton";
+import { SetupDetails } from "./SetupDetails";
+import { SetupTabs } from "./SetupTabs";
+import { CreateOrganizationCard } from "./CreateOrganizationCard";
 
 type ArticleActionItem = {
   id: string;
@@ -44,8 +48,11 @@ export default async function ArticlesPage({
     name: string;
     query: string;
     displayName: string | null;
-    searchPhrase: string | null;
-    focusFilter: string;
+    keywords: string | null;
+    companyOrOrg: string | null;
+    person: string | null;
+    searchPhrase?: string | null;
+    focusFilter?: string | null;
     lastIngestAt: Date | null;
     cadence: string;
     nextRunAt: Date | null;
@@ -70,6 +77,26 @@ export default async function ArticlesPage({
   let personas: { id: string; name: string; recipeType: string | null }[] = [];
   let selectedPersonaIds: string[] = [];
   let jobStatus = { queued: 0, processing: 0 };
+  let isAdmin = false;
+
+  const authObj = await auth();
+  if (authContext && authObj?.orgId) {
+    if (isClerkOrgAdmin(authObj)) {
+      isAdmin = true;
+    } else {
+      const orgForAdmin = await prisma.organization.findUnique({
+        where: { clerkOrgId: authObj.orgId },
+        select: { id: true },
+      });
+      if (orgForAdmin) {
+        const user = await prisma.user.findUnique({
+          where: { clerkUserId: authContext.clerkUserId },
+          select: { id: true },
+        });
+        isAdmin = await isUserAdmin(orgForAdmin.id, user?.id ?? null);
+      }
+    }
+  }
 
   if (orgId) {
     org = await prisma.organization.findUnique({
@@ -158,30 +185,40 @@ export default async function ArticlesPage({
   );
   const hasAnyArticles = allArticles.length > 0;
 
-  const ingestCard = orgId && org ? (
-    <IngestCardServer
-      organizationId={org.id}
-      topics={topics.map((t) => ({
-        id: t.id,
-        name: t.name,
-        query: t.query,
-        displayName: t.displayName ?? null,
-        searchPhrase: t.searchPhrase ?? null,
-        focusFilter: t.focusFilter ?? "ANY",
-        lastIngestAt: t.lastIngestAt ?? null,
-        nextRunAt: t.nextRunAt ?? null,
-        health: t.health,
-        lastIngestSuccessAt: t.lastIngestSuccessAt ?? null,
-        lastIngestFailureAt: t.lastIngestFailureAt ?? null,
-        articlesCount: t.articles.length,
-        queuedAt: t.queuedAt ?? null,
-        runningAt: t.runningAt ?? null,
-      }))}
-      personas={personas}
-      selectedPersonaIds={selectedPersonaIds}
-      orgCadence={org.ingestCadence}
-    />
-  ) : null;
+  const setupContent =
+    orgId && org ? (
+      <SetupTabs
+        topicsContent={
+          <TopicsCard
+            organizationId={org.id}
+            isAdmin={isAdmin}
+            topics={topics.map((t) => ({
+              id: t.id,
+              name: t.name,
+              query: t.query,
+              displayName: t.displayName ?? null,
+              keywords: t.keywords ?? null,
+              companyOrOrg: t.companyOrOrg ?? null,
+              person: t.person ?? null,
+              searchPhrase: t.searchPhrase ?? null,
+              focusFilter: t.focusFilter ?? null,
+              lastIngestAt: t.lastIngestAt ?? null,
+              nextRunAt: t.nextRunAt ?? null,
+              health: t.health,
+              lastIngestSuccessAt: t.lastIngestSuccessAt ?? null,
+              lastIngestFailureAt: t.lastIngestFailureAt ?? null,
+              articlesCount: t.articles.length,
+              queuedAt: t.queuedAt ?? null,
+              runningAt: t.runningAt ?? null,
+            }))}
+            orgCadence={org.ingestCadence}
+          />
+        }
+        personasContent={
+          <PersonasCard personas={personas} selectedPersonaIds={selectedPersonaIds} />
+        }
+      />
+    ) : null;
 
   return (
     <div className="space-y-6">
@@ -193,18 +230,10 @@ export default async function ArticlesPage({
           </span>
         </div>
       )}
-      {ingestCard && (
-        <details className="group rounded-2xl border border-stone-200 bg-stone-50/60 dark:border-stone-700 dark:bg-stone-800/30">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-2xl px-4 py-3 text-left text-sm font-medium text-stone-700 transition-colors hover:bg-stone-100/80 hover:text-stone-900 dark:text-stone-300 dark:hover:bg-stone-700/50 dark:hover:text-stone-100 [&::-webkit-details-marker]:hidden">
-            <span>Setup: Topics & personas</span>
-            <span className="shrink-0 text-stone-500 dark:text-stone-400 transition-transform group-open:rotate-180 dark:text-zinc-500" aria-hidden>
-              ▼
-            </span>
-          </summary>
-          <div className="border-t border-stone-200 px-4 pb-4 pt-3 dark:border-stone-700">
-            {ingestCard}
-          </div>
-        </details>
+      {setupContent && (
+        <SetupDetails>
+          {setupContent}
+        </SetupDetails>
       )}
 
       {banner && <Banner message={banner} clearHref={clearBannerHref} />}
@@ -215,13 +244,7 @@ export default async function ArticlesPage({
         </div>
       )}
 
-      {!orgId && (
-        <Card className="p-5 sm:p-6">
-          <p className="text-sm text-amber-800 dark:text-amber-200">
-            Select an organization above to see articles.
-          </p>
-        </Card>
-      )}
+      {!orgId && <CreateOrganizationCard />}
 
       {orgId && !hasAnyArticles && (
         <Card className="rounded-3xl py-16 text-center">

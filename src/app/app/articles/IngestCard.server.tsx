@@ -1,48 +1,47 @@
 import { Card } from "@/components/ui/Card";
-import { updateOrgSelectedPersonas } from "@/app/app/actions";
 import { createPersona } from "@/app/app/server-actions";
-import { PersonasMultiSelect } from "./PersonasMultiSelect";
+import { PersonaList } from "./PersonaList";
 import { TopicsSection } from "./TopicsSection";
 import type { TopicRow } from "./TopicsSection";
 
-type Persona = { id: string; name: string; recipeType: string | null };
+export type SetupPersona = { id: string; name: string; recipeType: string | null };
 
-type Props = {
+type TopicsCardProps = {
   organizationId: string;
   topics: TopicRow[];
-  personas: Persona[];
-  selectedPersonaIds: string[];
   orgCadence: string;
+  isAdmin: boolean;
 };
 
-export function IngestCardServer({ organizationId, topics, personas, selectedPersonaIds, orgCadence }: Props) {
+type PersonasCardProps = {
+  personas: SetupPersona[];
+  selectedPersonaIds: string[];
+};
+
+export function TopicsCard({ organizationId, topics, orgCadence, isAdmin }: TopicsCardProps) {
+  return (
+    <Card className="w-full p-5 sm:p-6">
+      <TopicsSection
+        organizationId={organizationId}
+        topics={topics}
+        orgCadence={orgCadence}
+        isAdmin={isAdmin}
+      />
+    </Card>
+  );
+}
+
+export function PersonasCard({ personas, selectedPersonaIds }: PersonasCardProps) {
   return (
     <Card className="w-full p-5 sm:p-6">
       <h3 className="mb-4 text-base font-medium text-stone-900 dark:text-stone-100">
-        Ingest
+        Personas
       </h3>
-
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-stretch">
-        {/* Left: Topics */}
-        <TopicsSection
-          organizationId={organizationId}
-          topics={topics}
-          orgCadence={orgCadence}
-        />
-
-        {/* Right: Personas */}
-        <div className="min-w-0 flex-1 space-y-3 lg:border-l lg:border-stone-200 lg:pl-6 dark:lg:border-stone-700">
-          <h4 className="text-xs font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
-            Personas
-          </h4>
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+        <div className="min-w-0 flex-1 space-y-3 lg:max-w-md">
           <p className="text-xs text-stone-500 dark:text-stone-400">
-            Personas tailor generated action items to different roles (e.g. Marketing, Sales). Select which to use for the feed.
+            Personas tailor action items to different roles. Add one below, then mark as Active to include in the feed.
           </p>
-          <PersonasMultiSelect
-            personas={personas}
-            selectedPersonaIds={selectedPersonaIds}
-            formAction={updateOrgSelectedPersonas}
-          />
           <form action={createPersona} className="flex flex-wrap gap-2">
             <input
               name="name"
@@ -57,11 +56,9 @@ export function IngestCardServer({ organizationId, topics, personas, selectedPer
               Add persona
             </button>
           </form>
-          {personas.length > 0 && (
-            <p className="text-xs text-stone-500 dark:text-stone-400">
-              {personas.length} persona{personas.length === 1 ? "" : "s"}
-            </p>
-          )}
+        </div>
+        <div className="min-w-0 flex-1 lg:min-w-[280px]">
+          <PersonaList personas={personas} selectedPersonaIds={selectedPersonaIds} />
         </div>
       </div>
     </Card>
