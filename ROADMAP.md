@@ -5,10 +5,10 @@
 Active Phase: 8 (Repo Hygiene)
 Active Item: Phase 8 complete; lint clean, logging polish, README infra
 Last Verified Milestone: Phase 6 migration applied; Phase 8 hygiene done
-Last Session (Feb 21): Admin access (isClerkOrgAdmin + Clerk/DB fallback); Dev tools removed from Admin Data
+Last Session (Mar 8): Production deploy (Vercel); external cron (cron-job.org) every 5 min; Admin Jobs Run jobs now: Processing state, disabled when queue empty
 Last Schema Change: UsageEvent inputTokens, outputTokens, model
 Last Migration: 20260304040126_add_usage_event_tokens
-Last Production Deploy: None since retention verification
+Last Production Deploy: Mar 8 — Vercel CLI; smoke test passed
 
 ---
 
@@ -21,14 +21,14 @@ Last Production Deploy: None since retention verification
 Active Phase: 8 (Repo Hygiene)
 Active Item: Phase 8 complete; lint clean, logging polish, README infra
 Last Verified Milestone: Phase 6 migration applied; Phase 8 hygiene done
-Last Session (Feb 21): Admin access (isClerkOrgAdmin + Clerk/DB fallback); Dev tools removed from Admin Data
+Last Session (Mar 8): Production deploy (Vercel); external cron (cron-job.org) every 5 min; Admin Jobs Run jobs now: Processing state, disabled when queue empty
 Last Schema Change: UsageEvent inputTokens, outputTokens, model
 Last Migration: 20260304040126_add_usage_event_tokens
-Last Production Deploy: None since retention verification
+Last Production Deploy: Mar 8 — Vercel CLI; smoke test passed
 
 ---
 
-Updated Feb 21, 2026
+Updated Mar 8, 2026
 
 ## Phase 0 — Product UI Foundation (Confirmed via Routes)
 
@@ -183,13 +183,13 @@ Phase 1 completed:
 - [x] Cron route secret-gated (not Clerk-gated)
 
 ### Requires Production Verification
-- [ ] CRON_SECRET verified in Vercel
+- [x] CRON_SECRET verified in Vercel
 - [ ] pnpm prisma migrate deploy confirmed
 - [ ] Dev/prod DB parity audit
-- [ ] Cron 401/200 tested in production
+- [x] Cron 401/200 tested in production
 - [ ] Overlap guard validated in prod logs
 - [ ] Notification dedupe validated in production
-- [ ] JobRun metrics validated in production
+- [x] JobRun metrics validated in production (Admin → Jobs)
 - [ ] Emergency cron disable switch verified in production (CRON_DISABLED)
 - [x] Rollback procedure documented
 - [x] Monitoring baseline defined
@@ -267,6 +267,7 @@ Ongoing UI improvements; add concrete items as you go (here or in `docs/ux-backl
 - [x] Copy and tone: friendlier empty states (articles, actions, observability, queue); status labels (To do / In progress / Done / Dismissed); clearer CTAs and error banner; Ingest placeholder and audit "No changes yet."
 - [x] Metrics/observability: intro line and section descriptions (Recent Job Runs, Job Metrics); queue backlog label "Warning at 20+ due · Critical at 50+ due"; clearer at-a-glance context.
 - [x] Personas, notifications, and other flows: persona helper text and placeholder (e.g. Marketing, Sales); notification settings subtitle and no-org copy; "Settings saved" / friendlier form error; data governance no-org copy; "Add persona" button label.
+- [x] Admin Jobs Run jobs now: useTransition for Processing state; pass server action directly; button when runs exist; disabled when queue empty (hasQueuedJobs).
 
 **Track as you decide:** When you land on a specific change, add a line above (e.g. `- [ ] Clearer empty state on Articles`) or a bullet in `docs/ux-backlog.md` and check it off when done.
 
@@ -290,7 +291,7 @@ Ongoing UI improvements; add concrete items as you go (here or in `docs/ux-backl
 - [ ] Manual CronLock row test → { skipped: true }
 - [ ] Backoff + DEAD behavior verified
 - [ ] Notification dedupe verified
-- [ ] JobRun metrics visible
+- [x] JobRun metrics visible
 - [ ] No duplicate background execution
 - [ ] Logs contain no sensitive payload
 - [ ] Cron endpoint is not Clerk-gated in production (secret-gated only)
