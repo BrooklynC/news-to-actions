@@ -206,6 +206,12 @@ model Topic {
   query              String
   searchPhrase       String?
   focusFilter        TopicFocus       @default(ANY)
+  /** Keywords for news search (exact phrase via quotes). */
+  keywords           String?
+  /** Company or organization name (quoted in query). */
+  companyOrOrg       String?
+  /** Person name (quoted in query). */
+  person             String?
   displayName        String?
   ingestionCadence   IngestionCadence @default(DAILY)
   isIngestionEnabled Boolean          @default(true)
