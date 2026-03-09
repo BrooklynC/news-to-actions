@@ -38,3 +38,23 @@ export async function isAdminInAnyOrg(clerkUserId: string): Promise<boolean> {
   });
   return adminMembership != null;
 }
+
+/**
+ * True if this user is the only member of the organization.
+ * Single-user orgs are treated as admin so they get access to all views.
+ */
+export async function isOnlyMemberOfOrg(
+  organizationId: string,
+  userId: string | null
+): Promise<boolean> {
+  if (!userId) return false;
+  const count = await prisma.membership.count({
+    where: { organizationId },
+  });
+  if (count !== 1) return false;
+  const m = await prisma.membership.findFirst({
+    where: { organizationId },
+    select: { userId: true },
+  });
+  return m?.userId === userId;
+}

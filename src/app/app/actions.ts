@@ -85,7 +85,7 @@ export async function createMyOrganization(): Promise<
 
     return { ok: true, clerkOrgId };
   } catch (e) {
-    log.warn("createMyOrganization.failed", "Create organization failed", { userId, error: String(e) });
+    log.warn("createMyOrganization.failed", "Create organization failed", { meta: { userId }, err: e });
     return { ok: false, error: "Could not create organization. Use the Organization menu in the header to create one." };
   }
 }
