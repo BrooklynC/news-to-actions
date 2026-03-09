@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -17,6 +17,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "News to Actions — Turn news into actions",
   description: "Define topics, get articles, AI summaries, and role-based action items. One dashboard for teams.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: "cover",
 };
 
 const themeInitScript = `

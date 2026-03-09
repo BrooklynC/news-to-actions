@@ -9,24 +9,27 @@ export default async function Home() {
   return (
     <div className="min-h-screen bg-[var(--background)]">
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-stone-200/60 bg-white/90 backdrop-blur-md dark:border-stone-800/60 dark:bg-stone-950/90">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4 sm:px-6">
+      <header
+        className="sticky top-0 z-50 border-b border-stone-200/60 bg-white/90 backdrop-blur-md dark:border-stone-800/60 dark:bg-stone-950/90"
+        style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+      >
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-2 px-3 py-3 sm:px-6 sm:py-4">
           <Link
             href="/"
-            className="text-xl font-semibold tracking-tight text-stone-900 dark:text-stone-100"
+            className="min-h-[44px] shrink-0 truncate text-lg font-semibold tracking-tight text-stone-900 dark:text-stone-100 sm:text-xl"
           >
             News to Actions
           </Link>
-          <nav className="flex items-center gap-3">
+          <nav className="flex items-center gap-2">
             <Link
               href="/sign-in"
-              className="rounded-full px-4 py-2.5 text-sm font-medium text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
+              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full px-4 py-2.5 text-sm font-medium text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100 sm:min-w-0"
             >
               Sign in
             </Link>
             <Link
               href="/sign-up"
-              className="rounded-full bg-teal-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-teal-700 active:scale-[0.98] dark:bg-teal-500 dark:hover:bg-teal-600"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-teal-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-teal-700 active:scale-[0.98] dark:bg-teal-500 dark:hover:bg-teal-600"
             >
               Sign up
             </Link>
@@ -36,7 +39,7 @@ export default async function Home() {
 
       <main>
         {/* Hero */}
-        <section className="mx-auto max-w-5xl px-4 py-16 sm:py-24 sm:px-6">
+        <section className="mx-auto max-w-5xl px-3 py-12 sm:px-6 sm:py-24">
           <div className="text-center">
             <h1 className="text-4xl font-bold tracking-tight text-stone-900 dark:text-stone-50 sm:text-5xl">
               Turn news into actions
@@ -63,7 +66,7 @@ export default async function Home() {
 
         {/* Benefits */}
         <section className="border-t border-stone-200 dark:border-stone-800">
-          <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6 sm:py-20">
+          <div className="mx-auto max-w-5xl px-3 py-12 sm:px-6 sm:py-20">
             <h2 className="text-center text-2xl font-semibold text-stone-900 dark:text-stone-50 sm:text-3xl">
               Why News to Actions
             </h2>
@@ -113,8 +116,8 @@ export default async function Home() {
 
         {/* CTA */}
         <section className="border-t border-stone-200 dark:border-stone-800">
-          <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6 sm:py-20">
-            <div className="rounded-3xl bg-stone-100 px-6 py-12 text-center dark:bg-stone-800/50 sm:px-12 sm:py-16">
+          <div className="mx-auto max-w-5xl px-3 py-12 sm:px-6 sm:py-20">
+            <div className="rounded-3xl bg-stone-100 px-4 py-10 text-center dark:bg-stone-800/50 sm:px-12 sm:py-16">
               <h2 className="text-2xl font-semibold text-stone-900 dark:text-stone-50 sm:text-3xl">
                 Ready to turn news into actions?
               </h2>
@@ -142,7 +145,7 @@ export default async function Home() {
 
       {/* Footer */}
       <footer className="border-t border-stone-200 dark:border-stone-800">
-        <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+        <div className="mx-auto max-w-5xl px-3 py-6 sm:px-6 sm:py-8">
           <p className="text-center text-sm text-stone-500 dark:text-stone-400">
             © {new Date().getFullYear()} News to Actions. All rights reserved.
           </p>

@@ -22,7 +22,7 @@ export function PersonaList({ personas, selectedPersonaIds }: Props) {
         return (
           <li
             key={p.id}
-            className="flex flex-wrap items-center gap-2 rounded-xl border border-stone-200 bg-white py-2 pl-3 pr-2 dark:border-stone-700 dark:bg-stone-800/50"
+            className="flex min-h-[52px] flex-wrap items-center gap-2 rounded-xl border border-stone-200 bg-white py-3 pl-3 pr-2 dark:border-stone-700 dark:bg-stone-800/50 sm:py-2"
           >
             <span className="min-w-0 flex-1 truncate text-sm font-medium text-stone-900 dark:text-stone-100">
               {p.name}
@@ -52,7 +52,7 @@ export function PersonaList({ personas, selectedPersonaIds }: Props) {
               <input type="hidden" name="personaId" value={p.id} readOnly />
               <button
                 type="submit"
-                className="rounded px-2 py-1 text-xs font-medium text-stone-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                className="min-h-[44px] min-w-[44px] rounded px-3 py-2 text-xs font-medium text-stone-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400 sm:min-w-0 sm:px-2 sm:py-1"
                 aria-label={`Delete ${p.name}`}
               >
                 Delete

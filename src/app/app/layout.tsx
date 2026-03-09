@@ -57,37 +57,43 @@ export default async function AppLayout({
 
   return (
     <div className="min-h-screen bg-[var(--background)]">
-      <header className="sticky top-0 z-40 border-b border-stone-200/60 bg-white/80 backdrop-blur-md dark:border-stone-800/60 dark:bg-stone-950/80">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6 sm:py-5">
-          <Link
-            href="/app/articles"
-            className="flex items-center gap-2 text-xl font-semibold tracking-tight text-stone-900 dark:text-stone-100"
-          >
-            News Actions
-            <span className="rounded-full bg-stone-200/80 px-2.5 py-0.5 text-xs font-medium text-stone-600 dark:bg-stone-700/80 dark:text-stone-300">
-              beta
-            </span>
-          </Link>
-          <div className="flex items-center gap-3 sm:gap-5">
-            <AppNav failureCount={failedCount} isAdmin={isAdmin} />
-            <div className="h-5 w-px bg-stone-200 dark:bg-stone-700" />
-            <div className="flex items-center gap-2">
-              <OrganizationSwitcher
-                afterCreateOrganizationUrl="/app/articles"
-                afterSelectOrganizationUrl="/app/articles"
-                hidePersonal
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-stone-500 dark:text-stone-400">
-                You
+      <header
+        className="sticky top-0 z-40 border-b border-stone-200/60 bg-white/80 backdrop-blur-md dark:border-stone-800/60 dark:bg-stone-950/80"
+        style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+      >
+        <div className="mx-auto max-w-6xl px-3 py-3 sm:px-6 sm:py-5">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <Link
+              href="/app/articles"
+              className="flex min-h-[44px] shrink-0 items-center gap-1.5 text-base font-semibold tracking-tight text-stone-900 dark:text-stone-100 sm:gap-2 sm:text-xl"
+              aria-label="News Actions home"
+            >
+              <span className="truncate">News Actions</span>
+              <span className="shrink-0 rounded-full bg-stone-200/80 px-2 py-0.5 text-[10px] font-medium text-stone-600 dark:bg-stone-700/80 dark:text-stone-300 sm:text-xs">
+                beta
               </span>
-              <UserButton afterSignOutUrl="/" />
+            </Link>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <AppNav failureCount={failedCount} isAdmin={isAdmin} />
+              <div className="hidden h-5 w-px bg-stone-200 sm:block dark:bg-stone-700" />
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <OrganizationSwitcher
+                  afterCreateOrganizationUrl="/app/articles"
+                  afterSelectOrganizationUrl="/app/articles"
+                  hidePersonal
+                />
+              </div>
+              <div className="flex min-h-[44px] items-center gap-1.5 sm:gap-2">
+                <span className="hidden text-xs font-medium text-stone-500 sm:inline dark:text-stone-400">
+                  You
+                </span>
+                <UserButton afterSignOutUrl="/" />
+              </div>
             </div>
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
+      <main className="mx-auto max-w-6xl px-3 py-5 sm:px-6 sm:py-10">
         {children}
       </main>
     </div>

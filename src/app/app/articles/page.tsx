@@ -298,7 +298,7 @@ export default async function ArticlesPage({
                       </a>
                       <div className="flex shrink-0 items-center gap-2">
                         <span
-                          className="max-w-[140px] truncate rounded-full bg-stone-100 px-3 py-1 text-xs font-medium text-stone-700 dark:bg-stone-800 dark:text-stone-400"
+                          className="max-w-[120px] truncate rounded-full bg-stone-100 px-3 py-1.5 text-xs font-medium text-stone-700 sm:max-w-[140px] dark:bg-stone-800 dark:text-stone-400"
                           title={a.topicName}
                         >
                           {a.topicName}
@@ -397,7 +397,7 @@ export default async function ArticlesPage({
                                         )}
                                         <button
                                           type="submit"
-                                          className="rounded-lg rounded-full border border-stone-200 bg-white px-2.5 py-1 text-xs font-medium text-stone-700 transition-colors hover:bg-stone-50 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
+                                          className="min-h-[44px] min-w-[44px] rounded-full border border-stone-200 bg-white px-3 py-2 text-xs font-medium text-stone-700 transition-colors hover:bg-stone-50 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700 sm:min-w-0 sm:px-2.5 sm:py-1"
                                         >
                                           Mark done
                                         </button>

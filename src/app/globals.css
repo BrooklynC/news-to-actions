@@ -24,12 +24,17 @@ html.dark {
   --font-mono: var(--font-geist-mono);
 }
 
+html {
+  overflow-x: hidden;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
 }
 
 /* Line-clamp utilities (fallback when Tailwind line-clamp not available) */

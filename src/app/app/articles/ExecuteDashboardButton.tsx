@@ -79,12 +79,15 @@ export function ExecuteDashboardButton({ initialStatus }: Props) {
 
   const label = isProcessing ? "Processing..." : hadWork ? "Ready" : "Execute";
 
+  const buttonClass =
+    "inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2.5 text-sm font-medium transition-transform duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300 focus-visible:ring-offset-2 active:scale-[0.98]";
+
   if (isProcessing) {
     return (
       <button
         type="button"
         disabled
-        className="rounded-xl border border-zinc-200 bg-zinc-100 px-4 py-2.5 text-sm font-medium text-zinc-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+        className={`${buttonClass} border border-zinc-200 bg-zinc-100 text-zinc-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-400`}
       >
         {label}
       </button>
@@ -99,7 +102,7 @@ export function ExecuteDashboardButton({ initialStatus }: Props) {
           setHadWork(false);
           router.refresh();
         }}
-        className="rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-transform duration-150 hover:bg-zinc-800 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300 focus-visible:ring-offset-2 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+        className={`${buttonClass} bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200`}
       >
         {label}
       </button>
@@ -110,7 +113,7 @@ export function ExecuteDashboardButton({ initialStatus }: Props) {
     <form action={executeDashboard}>
       <button
         type="submit"
-        className="rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-transform duration-150 hover:bg-zinc-800 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300 focus-visible:ring-offset-2 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+        className={`${buttonClass} bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200`}
       >
         {label}
       </button>

@@ -32,7 +32,7 @@ export function SetupDetails({ children }: Props) {
           e.preventDefault();
           toggle();
         }}
-        className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-2xl px-4 py-3 text-left text-sm font-medium text-stone-700 transition-colors hover:bg-stone-100/80 hover:text-stone-900 dark:text-stone-300 dark:hover:bg-stone-700/50 dark:hover:text-stone-100 [&::-webkit-details-marker]:hidden"
+        className="flex min-h-[44px] cursor-pointer list-none items-center justify-between gap-2 rounded-2xl px-4 py-3 text-left text-sm font-medium text-stone-700 transition-colors hover:bg-stone-100/80 hover:text-stone-900 dark:text-stone-300 dark:hover:bg-stone-700/50 dark:hover:text-stone-100 [&::-webkit-details-marker]:hidden"
       >
         <span>Setup</span>
         <span

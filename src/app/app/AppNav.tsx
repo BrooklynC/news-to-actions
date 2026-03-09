@@ -14,7 +14,7 @@ export function AppNav({
 
   const linkClass = (path: string, exact = true) => {
     const active = exact ? pathname === path : pathname.startsWith(path);
-    return `rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
+    return `inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full px-3 py-2 text-sm font-medium transition-all duration-200 sm:min-w-0 sm:px-4 ${
       active
         ? "bg-stone-900 text-white shadow-sm dark:bg-stone-100 dark:text-stone-900 font-semibold"
         : "text-stone-600 hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
@@ -22,7 +22,7 @@ export function AppNav({
   };
 
   return (
-    <nav className="flex items-center gap-1">
+    <nav className="flex flex-wrap items-center gap-1">
       <Link href="/app/articles" className={linkClass("/app/articles")}>
         Dashboard
       </Link>

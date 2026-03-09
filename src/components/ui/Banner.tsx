@@ -18,7 +18,7 @@ export function Banner({ message, clearHref }: BannerProps) {
         <span className="min-w-0 flex-1 break-words">{message}</span>
         <Link
           href={clearHref}
-          className="inline-flex shrink-0 items-center justify-center rounded-full px-2 py-1 text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
+          className="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-full text-lg text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
           aria-label="Close banner"
         >
           ×
